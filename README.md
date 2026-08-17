@@ -106,6 +106,15 @@ The program will open the **Gaia Assist** graphical interface.
 The application creates its GUI with Tkinter and starts the program through `main()`, which initializes the `GaiaAssistApp` window and enters the Tkinter event loop.
 
 ---
+Install the required dependencies
+
+After installing Python, open a terminal in the Gaia Assist folder and run:
+
+pip install -r requirements.txt
+
+This will install the external Python packages required by Gaia Assist.
+
+---
 
 # Using Gaia Assist
 
