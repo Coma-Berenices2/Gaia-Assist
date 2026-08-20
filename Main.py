@@ -7,7 +7,7 @@ import tkinter as tk
 from datetime import datetime
 from math import cos, log10, pi, radians, sqrt
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import astropy.units as u
 import requests
@@ -163,50 +163,122 @@ def run_with_retries(operation, service, attempts=3):
                 ) from error
             time.sleep(2 ** (attempt - 1))
 
-# Fill these strings manually to explain each clickable field row.
 FIELD_EXPLANATIONS = {
-    "source_id": "The ID of this object.",
-    "object_type": "The type of object it should be. Binary stars or white dwarfs sometimes display an objects with near 0 probability.",
-    "metallicity": "All 'metals' heavier than helium in this object.",
-    "ra": "The RA (Right Ascension) of a star is its east-west coordinate in the night sky.",
-    "dec": "DEC (abbreviation for Declination) is the celestial equivalent of latitude, measuring a star is north or south of the celestial equator.",
-    "l": "From 0 to 360, it measures an object's angular position relative to the galactic center in the perpestive of our Sun.",
-    "b": "From -90 to 90, it measures an object's angular position, from the perspective of our Sun, is ascending or descending, and which -90 is galactic South Pole, 90 is galactic North Pole. ",
-    "ra_error": "RA Error",
-    "dec_error": "DEC Error",
-    "parallax": "The angular measurement of an object's movement as the Earth orbits. It is used to measure the distance of an object.",
-    "parallax_over_error": "Parallax uncentainty.",
-    "astrometric_excess_noise": "The object's unexpected noise in it's position.",
-    "astrometric_excess_noise_sig": "How significant is the excess noise.",
-    "ruwe": "Renormalizing due to a star's mismatch of a single star model.",
-    "bp_rp": "The difference between blue and red color of a star.",
-    "phot_bp_rp_excess_factor": "BP+RP Excess Flux",
-    "ra_hms_dec": "The Equatorial Coordinate.",
-    "constellation": "The constellation it belongs to.",
-    "ra_correctness": "RA Correctness",
-    "dec_correctness": "DEC Correctness",
-    "parallax_data_status": "Can the parallax be used?",
-    "parallax_correctness": "Is the Parallax considered correct?",
-    "ruwe_correctness": "Correctness of Renormalised unit weight.",
-    "bp_rp_excess_correctness": "Correctness of excess photon factos. Note red dwarf inherently has a higher bp+rp excess flux, which can reach up to 1.3-1.5, exceeding what's normal for other stars.",
-    "distance_parsecs": "The distance measured in Parsecs.",
-    "distance_lightyears": "The distance measured in Lightyears.",
-    "ebv": "The dust extinction factor.",
-    "mean_g_band_extinction": "Dust factor for Gaia G band.",
-    "bp_rp_reddening": "Dust reddening factor for bp-rp.",
-    "new_bp_rp": "The new, dereddened bp-rp.",
-    "corrected_excess_flux": "",
-    "effective_temperature": "The temperature.",
-    "absolute_magnitude": "The absolute magnitude of the object(10 parsecs)",
-    "luminosity": "The brightness of this object.",
-    "radius": "The size of this object.",
-    "peak_wavelength": "",
-    "visual_absolute_magnitude": "The absolute magnitude in Johnson's V band.",
-    "visual_apparent_magnitude": "The apparent magnitude in Johnson's V band.",
-    "excess_noise_factor": "Noise Factor",
-    "excess_noise_significance": "Noise Factor's Significance.",
-    "star_type": "The exact type of the star. This uses effective temperature to locate the spectral type first, then visual absolute magnitude to locate the evolutionary stage.",
+    "source_id": "Gaia's unique numeric identifier for this source in the selected data release, displayed again after lookup so cross-matches and name resolutions can be checked.",
+    "object_type": "The most probable Gaia DSC class among star, galaxy, and quasar, reported from Gaia class probabilities. Low probabilities can occur for unusual, blended, binary, or poorly modeled sources.",
+    "metallicity": "Gaia's M/H estimate, the logarithmic abundance of elements heavier than helium relative to the Sun. Missing values are common and are handled by fallback temperature formulas.",
+    "ra": "Right ascension is the east-west equatorial sky coordinate of the source, measured in degrees on the ICRS celestial reference frame.",
+    "dec": "Declination is the north-south equatorial sky coordinate of the source, measured in degrees relative to the celestial equator on the ICRS frame.",
+    "l": "Galactic longitude is the source's angular position around the Milky Way plane, measured in degrees from the Galactic center direction.",
+    "b": "Galactic latitude is the source's angular height above or below the Milky Way plane, measured in degrees.",
+    "ra_error": "The standard uncertainty of Gaia's right ascension measurement, in milliarcseconds. Smaller values indicate a more precise astrometric position.",
+    "dec_error": "The standard uncertainty of Gaia's declination measurement, in milliarcseconds. Smaller values indicate a more precise astrometric position.",
+    "parallax": "Annual parallax is the apparent shift caused by Earth's orbit around the Sun, measured in milliarcseconds. Positive, reliable parallaxes can be converted into distance.",
+    "parallax_over_error": "The parallax signal-to-noise ratio: parallax divided by its formal uncertainty. Higher values generally mean a more reliable distance estimate.",
+    "astrometric_excess_noise": "Extra scatter Gaia needed to add to fit the source's astrometric solution. Elevated values can indicate unresolved companions, blending, variability, or modeling problems.",
+    "astrometric_excess_noise_sig": "The statistical significance of the astrometric excess noise. High significance means the excess noise is unlikely to be a random fluctuation.",
+    "ruwe": "Renormalised Unit Weight Error measures how well Gaia's single-source astrometric model fits the observations. Values near 1 are usually best.",
+    "phot_bp_rp_excess_factor": "Gaia's raw BP/RP flux excess factor compares the summed blue and red photometer flux to the G-band flux. It is sensitive to crowding, color, and calibration effects.",
+    "radial_velocity": "The line-of-sight velocity of the source, in kilometers per second. Positive values usually indicate motion away from the Solar System barycenter.",
+    "phot_g_mean_mag": "The mean apparent magnitude in Gaia's broad G band. Lower magnitude means the object appears brighter from Earth.",
+    "bp_rp": "The Gaia BP-RP color index, equal to blue magnitude minus red magnitude. Larger values usually indicate cooler or more reddened objects.",
+    "ra_hms_dec": "The equatorial position formatted as RA in hours, minutes, and seconds, with declination in degrees for easier sky-location reading.",
+    "constellation": "The official IAU constellation containing the source's equatorial position.",
+    "ra_correctness": "A qualitative precision grade based on Gaia's RA uncertainty. It describes positional reliability, not whether the astrophysical object is normal.",
+    "dec_correctness": "A qualitative precision grade based on Gaia's declination uncertainty. It describes positional reliability, not whether the astrophysical object is normal.",
+    "parallax_data_status": "A guard row that flags negative parallaxes as insufficient or unreliable for distance-based calculations.",
+    "parallax_correctness": "A qualitative reliability grade based on parallax_over_error. Higher signal-to-noise produces a stronger distance confidence grade.",
+    "ruwe_correctness": "A qualitative astrometric-fit grade based on RUWE. Poor values can indicate blending, binarity, extended structure, or a bad single-star fit.",
+    "bp_rp_excess_correctness": "A photometric quality grade based on corrected BP/RP excess flux C* compared with its color-dependent sigma tolerance.",
+    "distance_parsecs": "Distance estimated from parallax as 1000 divided by parallax in milliarcseconds. This simple inversion is most reliable for high parallax signal-to-noise.",
+    "distance_lightyears": "The parallax-based distance converted from parsecs to light-years using 1 pc = 3.26156 ly.",
+    "ebv": "Color excess E(B-V), an estimate of interstellar reddening caused by dust along the line of sight.",
+    "mean_g_band_extinction": "Estimated Gaia G-band extinction derived from E(B-V). It approximates how much dust dims the source in the G band.",
+    "bp_rp_reddening": "Estimated reddening correction for Gaia BP-RP color derived from E(B-V). It is subtracted from the observed BP-RP color.",
+    "new_bp_rp": "The dereddened Gaia BP-RP color after subtracting the BP-RP reddening factor. Later color-dependent calculations use this corrected value.",
+    "corrected_excess_flux": "The corrected BP/RP excess flux C*, computed by subtracting the expected color-dependent excess from Gaia's raw BP/RP excess factor.",
+    "effective_temperature": "The estimated stellar effective temperature: the blackbody temperature that would radiate the same total energy per surface area as the source.",
+    "absolute_magnitude": "The estimated Gaia G-band absolute magnitude: how bright the object would appear at 10 parsecs after applying the G-band extinction correction.",
+    "luminosity": "The luminosity relative to the Sun, estimated from absolute G-band magnitude using the adopted solar reference magnitude.",
+    "radius": "The stellar radius in solar radii, derived from luminosity and effective temperature using the Stefan-Boltzmann law.",
+    "peak_wavelength": "The blackbody peak wavelength from Wien's displacement law. Hotter sources peak at shorter, bluer wavelengths.",
+    "visual_absolute_magnitude": "The estimated Johnson V absolute magnitude, converted from Gaia G absolute magnitude using the corrected BP-RP color polynomial.",
+    "visual_apparent_magnitude": "The estimated Johnson V apparent magnitude, converted from extinction-corrected Gaia G apparent magnitude using the corrected BP-RP color polynomial.",
+    "excess_noise_factor": "A qualitative grade based on astrometric excess noise. Non-accurate values may indicate physical wobble, blending, or an imperfect astrometric model.",
+    "excess_noise_significance": "A qualitative grade based on the statistical significance of astrometric excess noise.",
+    "star_type": "The estimated stellar classification. The code first locates the spectral type from effective temperature, then uses Johnson V absolute magnitude to infer luminosity class.",
 }
+
+HELP_TUTORIAL = """Using Gaia Assist
+
+1. Enter a Gaia source ID
+Enter the object's Gaia source ID into the input field.
+
+For example:
+
+5853498713190525696
+
+Select the corresponding Gaia release:
+
+DR3
+DR2
+DR1
+
+The program expects numerical source IDs for these modes.
+
+Then click:
+
+Start Query
+
+2. Using DR2 or DR1
+If you select DR2 or DR1, Gaia Assist attempts to find the corresponding Gaia DR3 source.
+
+For DR2, the program uses the Gaia DR3 dr2_neighbourhood crossmatch table.
+
+For DR1, it performs a two-stage DR1 -> DR2 -> DR3 crossmatch.
+
+The final analysis is performed using the corresponding Gaia DR3 source.
+
+3. Using a common name
+The interface also contains an experimental:
+
+Common Name (Testing)
+
+mode.
+
+For example, a user can enter a recognized astronomical object name instead of a Gaia source ID.
+
+The program first queries CDS Sesame. If Sesame returns a Gaia identifier, the program attempts to resolve it to Gaia DR3. If only coordinates are returned, Gaia Assist searches for the nearest Gaia DR3 source within 30 arcseconds.
+
+Important
+The common-name functionality is explicitly labeled testing in the program and should not be considered as reliable as directly entering a Gaia source ID."""
+
+BULK_QUERY_GUIDE = """Using Bulk Query
+
+1. Enter one object per row
+Paste or type source IDs or common names into the large input box. Each line should contain exactly one object.
+
+2. Choose one input type
+All rows must use the same mode:
+
+DR3
+DR2
+DR1
+Common Name (Testing)
+
+DR3, DR2, and DR1 require numeric Gaia source IDs. Common Name (Testing) accepts recognized astronomical names and uses CDS Sesame before matching to Gaia DR3.
+
+3. Load a file instead
+Use Load Text File to choose a .txt or .csv file. The file contents are pasted into the input box, still with one object per row.
+
+4. Select output columns
+After pressing Continue, choose the rows/data fields you want included in the final table.
+
+5. Wait for the query
+Bulk queries can take a long time because Gaia, Sesame, and dust-map services may each be contacted many times. The progress bar and status text show which object is currently running.
+
+6. View results
+Results are shown as a sheet-like table with 10 objects per page. Use Previous Page and Next Page to move through the result pages."""
 
 FIELD_UNITS = {
     "source_id": "unitless",
@@ -276,6 +348,7 @@ class GaiaAssistApp:
         self.query_in_progress = False
         self.query_events = queue.Queue()
         self.last_saved_object_key = None
+        self.field_preview_window = None
         self.normal_value_font = ("Segoe UI", 10)
         self.underline_value_font = ("Segoe UI", 10, "underline")
 
@@ -292,6 +365,11 @@ class GaiaAssistApp:
 
         title = ttk.Label(header, text="Gaia Assist", font=("Segoe UI", 20, "bold"))
         title.grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            header,
+            text="Bulk Query",
+            command=self.open_bulk_query_window,
+        ).grid(row=0, column=1, sticky="e")
 
         subtitle = ttk.Label(
             header,
@@ -367,6 +445,11 @@ class GaiaAssistApp:
             text="Save",
             command=self.save_current_results,
         ).grid(row=0, column=1, sticky="e")
+        ttk.Button(
+            action_frame,
+            text="Help",
+            command=self.show_help_tutorial,
+        ).grid(row=0, column=2, sticky="e", padx=(8, 0))
 
         result_frame = ttk.Frame(self.root, padding=(24, 0, 24, 12))
         result_frame.grid(row=2, column=0, sticky="nsew")
@@ -490,6 +573,9 @@ class GaiaAssistApp:
                 else:
                     widget.grid()
 
+    def open_bulk_query_window(self):
+        BulkQueryWindow(self)
+
     def update_input_mode(self, _event=None):
         if self.gaia_release.get() == COMMON_NAME_RELEASE:
             self.input_label.configure(text="Common Name")
@@ -499,14 +585,68 @@ class GaiaAssistApp:
     def set_field_hover(self, field_name, is_hovered):
         font = self.underline_value_font if is_hovered else self.normal_value_font
         self.field_label_widgets[field_name].configure(font=font)
+        if is_hovered:
+            self.show_field_preview(field_name)
+        else:
+            self.hide_field_preview()
 
     def show_field_explanation(self, field_name):
+        self.hide_field_preview()
         title = DISPLAY_COLUMNS[field_name]
         explanation = FIELD_EXPLANATIONS.get(field_name, "")
         if not explanation:
             explanation = "Explanation not added yet."
 
         self.show_centered_message_window(title, explanation)
+
+    def show_field_preview(self, field_name):
+        self.hide_field_preview()
+        explanation = FIELD_EXPLANATIONS.get(field_name, "")
+        if not explanation:
+            explanation = "Explanation not added yet."
+
+        anchor = self.field_label_widgets[field_name]
+        preview = tk.Toplevel(self.root)
+        preview.wm_overrideredirect(True)
+        preview.attributes("-topmost", True)
+
+        frame = tk.Frame(
+            preview,
+            background="#172033",
+            borderwidth=1,
+            relief="solid",
+        )
+        frame.pack(fill="both", expand=True)
+        tk.Label(
+            frame,
+            text=explanation,
+            justify="left",
+            wraplength=360,
+            background="#172033",
+            foreground="#ffffff",
+            padx=10,
+            pady=8,
+            font=("Segoe UI", 9),
+        ).pack(fill="both", expand=True)
+
+        preview.update_idletasks()
+        preview_width = preview.winfo_reqwidth()
+        preview_height = preview.winfo_reqheight()
+        screen_width = preview.winfo_screenwidth()
+
+        position_x = anchor.winfo_rootx()
+        position_y = anchor.winfo_rooty() - preview_height - 8
+        if position_y < 0:
+            position_y = anchor.winfo_rooty() + anchor.winfo_height() + 8
+        position_x = max(0, min(position_x, screen_width - preview_width - 4))
+
+        preview.geometry(f"+{position_x}+{position_y}")
+        self.field_preview_window = preview
+
+    def hide_field_preview(self):
+        if self.field_preview_window is not None:
+            self.field_preview_window.destroy()
+            self.field_preview_window = None
 
     def update_result_scroll_region(self, _event):
         self.result_canvas.configure(scrollregion=self.result_canvas.bbox("all"))
@@ -726,11 +866,23 @@ class GaiaAssistApp:
         )
         self.show_centered_message_window("Star Type", message)
 
-    def show_centered_message_window(self, title, message):
+    def show_help_tutorial(self):
+        self.show_centered_message_window(
+            "Using Gaia Assist",
+            HELP_TUTORIAL,
+            window_width=560,
+            window_height=560,
+        )
+
+    def show_centered_message_window(
+        self,
+        title,
+        message,
+        window_width=420,
+        window_height=190,
+    ):
         message_window = tk.Toplevel(self.root)
         message_window.title(title)
-        window_width = 420
-        window_height = 190
         screen_width = message_window.winfo_screenwidth()
         screen_height = message_window.winfo_screenheight()
         position_x = (screen_width - window_width) // 2
@@ -745,7 +897,7 @@ class GaiaAssistApp:
         message_text = tk.Text(
             message_window,
             wrap="word",
-            height=5,
+            height=max(5, window_height // 28),
             borderwidth=0,
             highlightthickness=0,
             padx=22,
@@ -972,6 +1124,709 @@ class GaiaAssistApp:
         self.query_in_progress = False
         self.query_button.configure(state="normal")
         self.release_selector.configure(state="readonly")
+
+
+class BulkQueryWindow:
+    def __init__(self, app):
+        self.app = app
+        self.window = tk.Toplevel(app.root)
+        self.window.title("Bulk Query")
+        self.window.geometry("980x680")
+        self.window.minsize(860, 560)
+        self.window.transient(app.root)
+
+        self.release = tk.StringVar(value="DR3")
+        self.status = tk.StringVar(
+            value="Paste one object per row, or load a text file."
+        )
+        self.selected_columns = {
+            column_name: tk.BooleanVar(value=column_name in PRIMARY_DISPLAY_ORDER)
+            for column_name in DISPLAY_COLUMNS
+        }
+        self.object_inputs = []
+        self.input_buffer = ""
+        self.result_rows = []
+        self.current_page = 0
+        self.rows_per_page = tk.IntVar(value=10)
+        self.query_events = queue.Queue()
+        self.query_in_progress = False
+        self.is_closed = False
+
+        self.window.columnconfigure(0, weight=1)
+        self.window.rowconfigure(0, weight=1)
+        self.window.protocol("WM_DELETE_WINDOW", self.close)
+        self.show_input_page()
+
+    def close(self):
+        self.is_closed = True
+        self.query_in_progress = False
+        self.window.destroy()
+
+    def clear_window(self):
+        for child in self.window.winfo_children():
+            child.destroy()
+
+    def show_input_page(self):
+        self.clear_window()
+        self.window.rowconfigure(0, weight=1)
+
+        frame = ttk.Frame(self.window, padding=18)
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(2, weight=1)
+
+        top_bar = ttk.Frame(frame)
+        top_bar.grid(row=0, column=0, sticky="ew")
+        top_bar.columnconfigure(1, weight=1)
+
+        ttk.Label(
+            top_bar,
+            text="Bulk Query",
+            font=("Segoe UI", 17, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            top_bar,
+            text="Guide",
+            command=self.show_guide,
+        ).grid(row=0, column=2, sticky="e")
+
+        controls = ttk.Frame(frame)
+        controls.grid(row=1, column=0, sticky="ew", pady=(14, 10))
+        controls.columnconfigure(2, weight=1)
+
+        ttk.Label(controls, text="Input Type").grid(row=0, column=0, sticky="w")
+        ttk.Combobox(
+            controls,
+            textvariable=self.release,
+            values=("DR3", "DR2", "DR1", COMMON_NAME_RELEASE),
+            state="readonly",
+            width=24,
+        ).grid(row=0, column=1, sticky="w", padx=(8, 18))
+        ttk.Button(
+            controls,
+            text="Load Text File",
+            command=self.load_text_file,
+        ).grid(row=0, column=3, sticky="e")
+
+        text_frame = ttk.Frame(frame)
+        text_frame.grid(row=2, column=0, sticky="nsew")
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
+
+        self.input_text = tk.Text(
+            text_frame,
+            wrap="none",
+            font=("Consolas", 10),
+            undo=True,
+        )
+        self.input_text.grid(row=0, column=0, sticky="nsew")
+        if self.input_buffer:
+            self.input_text.insert("1.0", self.input_buffer)
+        y_scroll = ttk.Scrollbar(
+            text_frame,
+            orient="vertical",
+            command=self.input_text.yview,
+        )
+        y_scroll.grid(row=0, column=1, sticky="ns")
+        x_scroll = ttk.Scrollbar(
+            text_frame,
+            orient="horizontal",
+            command=self.input_text.xview,
+        )
+        x_scroll.grid(row=1, column=0, sticky="ew")
+        self.input_text.configure(
+            yscrollcommand=y_scroll.set,
+            xscrollcommand=x_scroll.set,
+        )
+
+        bottom_bar = ttk.Frame(frame)
+        bottom_bar.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        bottom_bar.columnconfigure(0, weight=1)
+        ttk.Label(
+            bottom_bar,
+            textvariable=self.status,
+            foreground="#555555",
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            bottom_bar,
+            text="Continue",
+            command=self.show_column_selection_page,
+        ).grid(row=0, column=1, sticky="e")
+
+    def load_text_file(self):
+        file_path = filedialog.askopenfilename(
+            parent=self.window,
+            title="Choose an object list",
+            filetypes=(
+                ("Text files", "*.txt"),
+                ("CSV files", "*.csv"),
+                ("All files", "*.*"),
+            ),
+        )
+        if not file_path:
+            return
+
+        try:
+            text = Path(file_path).read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = Path(file_path).read_text(encoding="utf-8-sig")
+        except OSError as error:
+            messagebox.showerror(
+                "File could not be loaded",
+                str(error),
+                parent=self.window,
+            )
+            return
+
+        self.input_text.delete("1.0", "end")
+        self.input_text.insert("1.0", text)
+        self.input_buffer = text
+        self.status.set(f"Loaded {Path(file_path).name}.")
+
+    def parse_object_inputs(self):
+        raw_text = self.input_text.get("1.0", "end")
+        self.input_buffer = raw_text.rstrip("\n")
+        objects = [
+            line.strip()
+            for line in raw_text.splitlines()
+            if line.strip()
+        ]
+        release = self.release.get()
+
+        if not objects:
+            raise ValueError("Please enter at least one object.")
+        if release != COMMON_NAME_RELEASE:
+            invalid_values = [value for value in objects if not value.isdigit()]
+            if invalid_values:
+                raise ValueError(
+                    f"{release} mode requires numeric source IDs. "
+                    f"First invalid row: {invalid_values[0]}"
+                )
+
+        return objects
+
+    def show_column_selection_page(self):
+        try:
+            self.object_inputs = self.parse_object_inputs()
+        except ValueError as error:
+            messagebox.showwarning(
+                "Check bulk input",
+                str(error),
+                parent=self.window,
+            )
+            return
+
+        self.clear_window()
+        self.window.rowconfigure(0, weight=1)
+
+        frame = ttk.Frame(self.window, padding=18)
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(1, weight=1)
+
+        top_bar = ttk.Frame(frame)
+        top_bar.grid(row=0, column=0, sticky="ew")
+        top_bar.columnconfigure(0, weight=1)
+        ttk.Label(
+            top_bar,
+            text=f"Choose Data Columns ({len(self.object_inputs)} objects)",
+            font=("Segoe UI", 15, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            top_bar,
+            text="Guide",
+            command=self.show_guide,
+        ).grid(row=0, column=2, sticky="e")
+
+        selection_container = ttk.Frame(frame)
+        selection_container.grid(row=1, column=0, sticky="nsew", pady=(14, 10))
+        selection_container.columnconfigure(0, weight=1)
+        selection_container.rowconfigure(0, weight=1)
+
+        canvas = tk.Canvas(selection_container, highlightthickness=0)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(
+            selection_container,
+            orient="vertical",
+            command=canvas.yview,
+        )
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        columns_frame = ttk.Frame(canvas)
+        canvas_window = canvas.create_window((0, 0), window=columns_frame, anchor="nw")
+        columns_frame.bind(
+            "<Configure>",
+            lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda event: canvas.itemconfigure(canvas_window, width=event.width),
+        )
+
+        for index, (column_name, label) in enumerate(DISPLAY_COLUMNS.items()):
+            row = index // 3
+            column = index % 3
+            ttk.Checkbutton(
+                columns_frame,
+                text=label,
+                variable=self.selected_columns[column_name],
+            ).grid(row=row, column=column, sticky="w", padx=8, pady=4)
+
+        bottom_bar = ttk.Frame(frame)
+        bottom_bar.grid(row=2, column=0, sticky="ew")
+        bottom_bar.columnconfigure(0, weight=1)
+        ttk.Button(
+            bottom_bar,
+            text="Back",
+            command=self.show_input_page,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            bottom_bar,
+            text="Select Primary Rows",
+            command=self.select_primary_columns,
+        ).grid(row=0, column=1, sticky="e", padx=(0, 8))
+        ttk.Button(
+            bottom_bar,
+            text="Select All",
+            command=lambda: self.set_all_columns(True),
+        ).grid(row=0, column=2, sticky="e", padx=(0, 8))
+        ttk.Button(
+            bottom_bar,
+            text="Start Bulk Query",
+            command=self.start_bulk_query,
+        ).grid(row=0, column=3, sticky="e")
+
+    def set_all_columns(self, is_selected):
+        for variable in self.selected_columns.values():
+            variable.set(is_selected)
+
+    def select_primary_columns(self):
+        for column_name, variable in self.selected_columns.items():
+            variable.set(column_name in PRIMARY_DISPLAY_ORDER)
+
+    def start_bulk_query(self):
+        selected = self.get_selected_columns()
+        if not selected:
+            messagebox.showwarning(
+                "Choose data columns",
+                "Please select at least one data field.",
+                parent=self.window,
+            )
+            return
+
+        self.result_rows = []
+        self.current_page = 0
+        self.query_in_progress = True
+        self.show_results_page()
+
+        worker = threading.Thread(
+            target=self.run_bulk_query,
+            args=(self.object_inputs, self.release.get(), selected),
+            daemon=True,
+        )
+        worker.start()
+        self.window.after(100, self.process_bulk_events)
+
+    def show_results_page(self):
+        self.clear_window()
+        self.window.rowconfigure(1, weight=1)
+
+        top_frame = ttk.Frame(self.window, padding=(18, 18, 18, 8))
+        top_frame.grid(row=0, column=0, sticky="ew")
+        top_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            top_frame,
+            text="Bulk Query Results",
+            font=("Segoe UI", 15, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            top_frame,
+            text="Guide",
+            command=self.show_guide,
+        ).grid(row=0, column=2, sticky="e")
+
+        progress_frame = ttk.Frame(top_frame)
+        progress_frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        progress_frame.columnconfigure(0, weight=1)
+        self.bulk_status = tk.StringVar(
+            value="Preparing bulk query. This can take a long time for large lists."
+        )
+        ttk.Label(
+            progress_frame,
+            textvariable=self.bulk_status,
+            foreground="#555555",
+        ).grid(row=0, column=0, sticky="w")
+        self.progress = ttk.Progressbar(
+            progress_frame,
+            maximum=max(len(self.object_inputs), 1),
+            mode="determinate",
+        )
+        self.progress.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+
+        action_frame = ttk.Frame(top_frame)
+        action_frame.grid(row=0, column=1, sticky="e", padx=(12, 8))
+        ttk.Button(
+            action_frame,
+            text="Show Input Rows",
+            command=self.show_entered_rows_window,
+        ).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(
+            action_frame,
+            text="Save Bulk Results",
+            command=self.save_bulk_results,
+        ).grid(row=0, column=1)
+
+        table_frame = ttk.Frame(self.window, padding=(18, 0, 18, 8))
+        table_frame.grid(row=1, column=0, sticky="nsew")
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+
+        self.results_table = ttk.Treeview(table_frame, show="headings", height=10)
+        self.results_table.grid(row=0, column=0, sticky="nsew")
+        self.results_table.bind("<Double-1>", self.copy_bulk_cell)
+        self.results_table.bind("<Control-c>", self.copy_selected_bulk_row)
+        self.results_table.bind("<Control-C>", self.copy_selected_bulk_row)
+        y_scroll = ttk.Scrollbar(
+            table_frame,
+            orient="vertical",
+            command=self.results_table.yview,
+        )
+        y_scroll.grid(row=0, column=1, sticky="ns")
+        x_scroll = ttk.Scrollbar(
+            table_frame,
+            orient="horizontal",
+            command=self.results_table.xview,
+        )
+        x_scroll.grid(row=1, column=0, sticky="ew")
+        self.results_table.configure(
+            yscrollcommand=y_scroll.set,
+            xscrollcommand=x_scroll.set,
+        )
+
+        nav_frame = ttk.Frame(self.window, padding=(18, 0, 18, 18))
+        nav_frame.grid(row=2, column=0, sticky="ew")
+        nav_frame.columnconfigure(1, weight=1)
+        self.prev_button = ttk.Button(
+            nav_frame,
+            text="Previous Page",
+            command=self.previous_page,
+        )
+        self.prev_button.grid(row=0, column=0, sticky="w")
+
+        page_size_frame = ttk.Frame(nav_frame)
+        page_size_frame.grid(row=0, column=1)
+        ttk.Label(page_size_frame, text="Rows per page").grid(
+            row=0,
+            column=0,
+            padx=(0, 8),
+        )
+        for index, row_count in enumerate((10, 20, 30), start=1):
+            ttk.Radiobutton(
+                page_size_frame,
+                text=str(row_count),
+                value=row_count,
+                variable=self.rows_per_page,
+                command=self.change_rows_per_page,
+            ).grid(row=0, column=index, padx=(0, 6))
+
+        self.page_status = tk.StringVar(value="Page 1 of 1")
+        ttk.Label(nav_frame, textvariable=self.page_status).grid(row=0, column=2)
+        self.next_button = ttk.Button(
+            nav_frame,
+            text="Next Page",
+            command=self.next_page,
+        )
+        self.next_button.grid(row=0, column=3, sticky="e")
+
+        self.render_results_page()
+
+    def get_selected_columns(self):
+        return [
+            column_name
+            for column_name in DISPLAY_COLUMNS
+            if self.selected_columns[column_name].get()
+        ]
+
+    def run_bulk_query(self, objects, release, selected_columns):
+        total = len(objects)
+        for index, object_id in enumerate(objects, start=1):
+            self.query_events.put(("progress", index - 1, total, object_id))
+            try:
+                source_data = fetch_gaia_source_data(object_id, release)
+                log_missing_values(object_id, source_data)
+                derived_data = calculate_derived_data(source_data)
+                display_data = GaiaAssistApp.build_display_data(
+                    source_data,
+                    derived_data,
+                )
+                row = {
+                    column_name: (
+                        "-"
+                        if display_data.get(column_name) is None
+                        else str(display_data.get(column_name))
+                    )
+                    for column_name in selected_columns
+                }
+            except Exception as error:
+                LOGGER.exception(
+                    "Bulk query failed for release=%s object=%s",
+                    release,
+                    object_id,
+                )
+                row = {column_name: "-" for column_name in selected_columns}
+                first_column = selected_columns[0]
+                row[first_column] = f"ERROR: {object_id}"
+                self.query_events.put(("row_error", object_id, str(error)))
+
+            self.query_events.put(("row", row))
+            self.query_events.put(("progress", index, total, object_id))
+
+        self.query_events.put(("done", total))
+
+    def process_bulk_events(self):
+        if self.is_closed:
+            return
+
+        try:
+            while True:
+                event = self.query_events.get_nowait()
+                event_type = event[0]
+
+                if event_type == "progress":
+                    completed, total, object_id = event[1], event[2], event[3]
+                    self.progress["value"] = completed
+                    self.bulk_status.set(
+                        f"Queried {completed} of {total}. Current object: {object_id}. "
+                        "Large lists can take a long time."
+                    )
+                elif event_type == "row":
+                    self.result_rows.append(event[1])
+                    self.render_results_page()
+                elif event_type == "row_error":
+                    self.bulk_status.set(
+                        f"Problem with {event[1]}. Continuing with the next object."
+                    )
+                elif event_type == "done":
+                    total = event[1]
+                    self.query_in_progress = False
+                    self.progress["value"] = total
+                    self.bulk_status.set(
+                        f"Bulk query finished. Loaded {len(self.result_rows)} rows."
+                    )
+        except queue.Empty:
+            pass
+
+        try:
+            window_exists = self.window.winfo_exists()
+        except tk.TclError:
+            return
+
+        if self.query_in_progress and window_exists:
+            self.window.after(100, self.process_bulk_events)
+
+    def render_results_page(self):
+        selected_columns = self.get_selected_columns()
+        self.results_table["columns"] = selected_columns
+        for column_name in selected_columns:
+            label = DISPLAY_COLUMNS[column_name]
+            unit = FIELD_UNITS.get(column_name, "")
+            heading = f"{label} ({unit})" if unit and unit != "unitless" else label
+            self.results_table.heading(column_name, text=heading)
+            width = self.calculate_column_width(column_name, heading)
+            self.results_table.column(
+                column_name,
+                width=width,
+                minwidth=width,
+                stretch=False,
+            )
+
+        for item in self.results_table.get_children():
+            self.results_table.delete(item)
+
+        rows_per_page = self.rows_per_page.get()
+        total_pages = max(
+            1,
+            (len(self.result_rows) + rows_per_page - 1) // rows_per_page,
+        )
+        self.current_page = min(self.current_page, total_pages - 1)
+        start = self.current_page * rows_per_page
+        end = start + rows_per_page
+        for row in self.result_rows[start:end]:
+            self.results_table.insert(
+                "",
+                "end",
+                values=[row.get(column_name, "-") for column_name in selected_columns],
+            )
+
+        self.page_status.set(f"Page {self.current_page + 1} of {total_pages}")
+        self.prev_button.configure(
+            state="normal" if self.current_page > 0 else "disabled"
+        )
+        self.next_button.configure(
+            state="normal" if self.current_page < total_pages - 1 else "disabled"
+        )
+
+    def calculate_column_width(self, column_name, heading):
+        values = [heading]
+        values.extend(row.get(column_name, "-") for row in self.result_rows)
+        longest_value = max(values, key=lambda value: len(str(value)))
+        return min(max(len(str(longest_value)) * 8 + 36, 150), 520)
+
+    def change_rows_per_page(self):
+        self.current_page = 0
+        self.render_results_page()
+
+    def previous_page(self):
+        if self.current_page > 0:
+            self.current_page -= 1
+            self.render_results_page()
+
+    def next_page(self):
+        rows_per_page = self.rows_per_page.get()
+        total_pages = max(
+            1,
+            (len(self.result_rows) + rows_per_page - 1) // rows_per_page,
+        )
+        if self.current_page < total_pages - 1:
+            self.current_page += 1
+            self.render_results_page()
+
+    def copy_bulk_cell(self, event):
+        row_id = self.results_table.identify_row(event.y)
+        column_id = self.results_table.identify_column(event.x)
+        if not row_id or not column_id:
+            return
+
+        column_index = int(column_id.lstrip("#")) - 1
+        values = self.results_table.item(row_id, "values")
+        if column_index < 0 or column_index >= len(values):
+            return
+
+        value = values[column_index]
+        self.window.clipboard_clear()
+        self.window.clipboard_append(value)
+        self.bulk_status.set(f"Copied: {value}")
+
+    def copy_selected_bulk_row(self, _event=None):
+        selected_items = self.results_table.selection()
+        if not selected_items:
+            return
+
+        selected_columns = self.get_selected_columns()
+        copied_rows = []
+        for item in selected_items:
+            values = self.results_table.item(item, "values")
+            copied_rows.append(
+                "\t".join(
+                    str(values[index])
+                    for index in range(min(len(values), len(selected_columns)))
+                )
+            )
+
+        copied_text = "\n".join(copied_rows)
+        self.window.clipboard_clear()
+        self.window.clipboard_append(copied_text)
+        self.bulk_status.set("Copied selected row data.")
+        return "break"
+
+    def show_entered_rows_window(self):
+        rows_window = tk.Toplevel(self.window)
+        rows_window.title("Bulk Query Input Rows")
+        rows_window.geometry("560x460")
+        rows_window.transient(self.window)
+
+        rows_window.columnconfigure(0, weight=1)
+        rows_window.rowconfigure(0, weight=1)
+
+        text = tk.Text(
+            rows_window,
+            wrap="none",
+            font=("Consolas", 10),
+            padx=10,
+            pady=10,
+        )
+        text.grid(row=0, column=0, sticky="nsew")
+        y_scroll = ttk.Scrollbar(rows_window, orient="vertical", command=text.yview)
+        y_scroll.grid(row=0, column=1, sticky="ns")
+        x_scroll = ttk.Scrollbar(rows_window, orient="horizontal", command=text.xview)
+        x_scroll.grid(row=1, column=0, sticky="ew")
+        text.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+
+        text.insert("1.0", "\n".join(self.object_inputs))
+
+    def save_bulk_results(self):
+        if not self.result_rows:
+            messagebox.showwarning(
+                "Nothing to save",
+                "Please run a bulk query before saving.",
+                parent=self.window,
+            )
+            return
+
+        try:
+            saved_file = self.write_bulk_results_file()
+        except OSError as error:
+            LOGGER.exception("Saving bulk results failed")
+            messagebox.showerror(
+                "Save failed",
+                f"The bulk data could not be saved.\n\n{error}",
+                parent=self.window,
+            )
+            return
+
+        messagebox.showinfo(
+            "Successfully saved",
+            f"Bulk data saved successfully to:\n{saved_file}",
+            parent=self.window,
+        )
+
+    def write_bulk_results_file(self):
+        SAVED_OBJECTS_DIR.mkdir(exist_ok=True)
+        timestamp = datetime.now()
+        saved_file = SAVED_OBJECTS_DIR / (
+            f"gaia_bulk_{timestamp:%Y%m%d_%H%M%S_%f}.txt"
+        )
+        selected_columns = self.get_selected_columns()
+
+        with saved_file.open("w", encoding="utf-8") as output_file:
+            output_file.write("Gaia Assist Bulk Query Data\n")
+            output_file.write(
+                f"Saved At: {timestamp.isoformat(timespec='seconds')}\n"
+            )
+            output_file.write(f"Input Mode: {self.release.get()}\n")
+            output_file.write(f"Input Count: {len(self.object_inputs)}\n")
+            output_file.write(f"Result Count: {len(self.result_rows)}\n")
+            output_file.write("\n")
+            headers = ["Input Row"] + [
+                DISPLAY_COLUMNS[column_name] for column_name in selected_columns
+            ]
+            units = ["-"] + [
+                FIELD_UNITS.get(column_name, "-") or "-"
+                for column_name in selected_columns
+            ]
+            output_file.write("\t".join(headers) + "\n")
+            output_file.write("\t".join(units) + "\n")
+
+            for index, row in enumerate(self.result_rows):
+                input_value = (
+                    self.object_inputs[index]
+                    if index < len(self.object_inputs)
+                    else "-"
+                )
+                values = [input_value]
+                values.extend(row.get(column_name, "-") for column_name in selected_columns)
+                output_file.write("\t".join(values) + "\n")
+
+        return saved_file
+
+    def show_guide(self):
+        self.app.show_centered_message_window(
+            "Bulk Query Guide",
+            BULK_QUERY_GUIDE,
+            window_width=600,
+            window_height=560,
+        )
 
 
 def fetch_sesame_response(common_name):
@@ -1578,6 +2433,8 @@ def format_star_classification(spectral_subclass, luminosity_class):
         return "WR"
     if spectral_subclass == "WR" and luminosity_class == "VI":
         return "O2VI *"
+    if luminosity_class == "WD":
+        return f"{spectral_subclass}WD"
 
     classification = f"{spectral_subclass}{luminosity_class}"
     if luminosity_class == "VI":
