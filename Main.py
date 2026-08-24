@@ -4,6 +4,7 @@ import re
 import threading
 import time
 import tkinter as tk
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from math import cos, log10, pi, radians, sqrt
 from pathlib import Path
@@ -23,6 +24,8 @@ GAIA_COLUMNS = {
     "dec": "Equatorial Coordinate DEC",
     "l": "Galactic Coordinate l",
     "b": "Galactic Coordinate b",
+    "pmra": "RA Proper Motion",
+    "pmdec": "DEC Proper Motion",
     "ra_error": "RA Error",
     "dec_error": "DEC Error",
     "parallax": "Parallax",
@@ -115,6 +118,8 @@ DEBUG_LOG = Path(__file__).with_name("gaia_assist_debug.log")
 SAVED_OBJECTS_DIR = Path(__file__).with_name("saved_objects")
 DUST_CALCULATOR_URL = "https://nadc.china-vo.org/data/dustmaps/calculator"
 COMMON_NAME_RELEASE = "Common Name (Testing)"
+BULK_GAIA_BATCH_SIZE = 20
+BULK_CALCULATION_WORKERS = 5
 SESAME_URLS = (
     "https://cds.unistra.fr/cgi-bin/nph-sesame/-oxpI/SNV?{name}",
     "https://cdsweb.u-strasbg.fr/cgi-bin/nph-sesame/-oxpI/SNV?{name}",
@@ -171,6 +176,8 @@ FIELD_EXPLANATIONS = {
     "dec": "Declination is the north-south equatorial sky coordinate of the source, measured in degrees relative to the celestial equator on the ICRS frame.",
     "l": "Galactic longitude is the source's angular position around the Milky Way plane, measured in degrees from the Galactic center direction.",
     "b": "Galactic latitude is the source's angular height above or below the Milky Way plane, measured in degrees.",
+    "pmra": "Proper motion in right ascension is Gaia's measured angular motion of the source across the sky along the RA direction, including the cos(dec) factor, reported in milliarcseconds per year.",
+    "pmdec": "Proper motion in declination is Gaia's measured angular motion of the source across the sky along the declination direction, reported in milliarcseconds per year.",
     "ra_error": "The standard uncertainty of Gaia's right ascension measurement, in milliarcseconds. Smaller values indicate a more precise astrometric position.",
     "dec_error": "The standard uncertainty of Gaia's declination measurement, in milliarcseconds. Smaller values indicate a more precise astrometric position.",
     "parallax": "Annual parallax is the apparent shift caused by Earth's orbit around the Sun, measured in milliarcseconds. Positive, reliable parallaxes can be converted into distance.",
@@ -272,10 +279,10 @@ DR3, DR2, and DR1 require numeric Gaia source IDs. Common Name (Testing) accepts
 Use Load Text File to choose a .txt or .csv file. The file contents are pasted into the input box, still with one object per row.
 
 4. Select output columns
-After pressing Continue, choose the rows/data fields you want included in the final table.
+After pressing Continue, choose the rows/data fields you want included in the final table. Drag compact field blocks to arrange the display order from top-left to bottom-right.
 
 5. Wait for the query
-Bulk queries can take a long time because Gaia, Sesame, and dust-map services may each be contacted many times. The progress bar and status text show which object is currently running.
+Bulk queries can take a long time because Gaia, Sesame, and dust-map services may each be contacted many times. Gaia source-table lookups are processed in batches of 20, and several per-source calculations can run in parallel. The progress bar and status text show which batch or object is currently running.
 
 6. View results
 Results are shown as a sheet-like table with 10 objects per page. Use Previous Page and Next Page to move through the result pages."""
@@ -288,6 +295,8 @@ FIELD_UNITS = {
     "dec": "deg",
     "l": "deg",
     "b": "deg",
+    "pmra": "mas/yr",
+    "pmdec": "mas/yr",
     "ra_error": "mas",
     "dec_error": "mas",
     "parallax": "mas",
@@ -336,7 +345,8 @@ class GaiaAssistApp:
 
         self.gaia_code = tk.StringVar()
         self.gaia_release = tk.StringVar(value="DR3")
-        self.hide_prior_data = tk.BooleanVar(value=False)
+        self.hide_gaia_data = tk.BooleanVar(value=False)
+        self.hide_derived_data = tk.BooleanVar(value=False)
         self.status = tk.StringVar(value="Enter a Gaia source_id to begin.")
         self.result_vars = {
             column_name: tk.StringVar(value="-") for column_name in DISPLAY_COLUMNS
@@ -424,10 +434,16 @@ class GaiaAssistApp:
 
         ttk.Checkbutton(
             input_frame,
-            text="Hide Prior Data",
-            variable=self.hide_prior_data,
-            command=self.toggle_prior_data,
+            text="Hide Gaia Data",
+            variable=self.hide_gaia_data,
+            command=self.update_row_visibility,
         ).grid(row=2, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+        ttk.Checkbutton(
+            input_frame,
+            text="Hide Derived Data",
+            variable=self.hide_derived_data,
+            command=self.update_row_visibility,
+        ).grid(row=2, column=1, sticky="w", padx=(145, 0), pady=(8, 0))
 
         self.status_label = ttk.Label(
             self.root,
@@ -563,12 +579,17 @@ class GaiaAssistApp:
                 unit_frame,
             )
 
-    def toggle_prior_data(self):
-        hide_secondary_rows = self.hide_prior_data.get()
+    def update_row_visibility(self):
+        hide_gaia_rows = self.hide_gaia_data.get()
+        hide_derived_rows = self.hide_derived_data.get()
 
-        for column_name in SECONDARY_DISPLAY_COLUMNS:
+        for column_name in DISPLAY_COLUMNS:
+            should_hide = (
+                (column_name in GAIA_COLUMNS and hide_gaia_rows)
+                or (column_name in DERIVED_COLUMNS and hide_derived_rows)
+            )
             for widget in self.row_widgets[column_name]:
-                if hide_secondary_rows:
+                if should_hide:
                     widget.grid_remove()
                 else:
                     widget.grid()
@@ -1127,12 +1148,14 @@ class GaiaAssistApp:
 
 
 class BulkQueryWindow:
+    COLUMN_BLOCKS_PER_ROW = 5
+
     def __init__(self, app):
         self.app = app
         self.window = tk.Toplevel(app.root)
         self.window.title("Bulk Query")
-        self.window.geometry("980x680")
-        self.window.minsize(860, 560)
+        self.window.geometry("1120x720")
+        self.window.minsize(980, 620)
         self.window.transient(app.root)
 
         self.release = tk.StringVar(value="DR3")
@@ -1143,6 +1166,9 @@ class BulkQueryWindow:
             column_name: tk.BooleanVar(value=column_name in PRIMARY_DISPLAY_ORDER)
             for column_name in DISPLAY_COLUMNS
         }
+        self.column_order = list(DISPLAY_COLUMNS)
+        self.column_block_frames = []
+        self.dragged_column = None
         self.object_inputs = []
         self.input_buffer = ""
         self.result_rows = []
@@ -1345,17 +1371,21 @@ class BulkQueryWindow:
 
         canvas = tk.Canvas(selection_container, highlightthickness=0)
         canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar = ttk.Scrollbar(
-            selection_container,
-            orient="vertical",
-            command=canvas.yview,
-        )
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        canvas.configure(yscrollcommand=scrollbar.set)
 
-        columns_frame = ttk.Frame(canvas)
-        canvas_window = canvas.create_window((0, 0), window=columns_frame, anchor="nw")
-        columns_frame.bind(
+        hint = ttk.Label(
+            selection_container,
+            text="Check fields to include. Drag compact blocks; final order reads left to right, top to bottom.",
+            foreground="#555555",
+        )
+        hint.grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+        self.columns_frame = ttk.Frame(canvas)
+        canvas_window = canvas.create_window(
+            (0, 0),
+            window=self.columns_frame,
+            anchor="nw",
+        )
+        self.columns_frame.bind(
             "<Configure>",
             lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
         )
@@ -1363,15 +1393,7 @@ class BulkQueryWindow:
             "<Configure>",
             lambda event: canvas.itemconfigure(canvas_window, width=event.width),
         )
-
-        for index, (column_name, label) in enumerate(DISPLAY_COLUMNS.items()):
-            row = index // 3
-            column = index % 3
-            ttk.Checkbutton(
-                columns_frame,
-                text=label,
-                variable=self.selected_columns[column_name],
-            ).grid(row=row, column=column, sticky="w", padx=8, pady=4)
+        self.render_column_blocks()
 
         bottom_bar = ttk.Frame(frame)
         bottom_bar.grid(row=2, column=0, sticky="ew")
@@ -1404,6 +1426,136 @@ class BulkQueryWindow:
     def select_primary_columns(self):
         for column_name, variable in self.selected_columns.items():
             variable.set(column_name in PRIMARY_DISPLAY_ORDER)
+        primary_columns = [
+            column_name for column_name in PRIMARY_DISPLAY_ORDER
+            if column_name in self.column_order
+        ]
+        secondary_columns = [
+            column_name for column_name in self.column_order
+            if column_name not in PRIMARY_DISPLAY_ORDER
+        ]
+        self.column_order = primary_columns + secondary_columns
+        self.render_column_blocks()
+
+    def render_column_blocks(self):
+        for child in self.columns_frame.winfo_children():
+            child.destroy()
+
+        self.column_block_frames = []
+        for column_index in range(self.COLUMN_BLOCKS_PER_ROW):
+            self.columns_frame.columnconfigure(
+                column_index,
+                weight=1,
+                minsize=190,
+            )
+
+        for index, column_name in enumerate(self.column_order):
+            row_index = index // self.COLUMN_BLOCKS_PER_ROW
+            grid_column = index % self.COLUMN_BLOCKS_PER_ROW
+            block = tk.Frame(
+                self.columns_frame,
+                borderwidth=1,
+                relief="solid",
+                background="#f7f7f7",
+                cursor="hand2",
+                height=34,
+            )
+            block.grid(row=row_index, column=grid_column, sticky="ew", padx=3, pady=3)
+            block.grid_propagate(False)
+            block.columnconfigure(2, weight=1)
+
+            handle = tk.Label(
+                block,
+                text="::",
+                width=2,
+                background="#f7f7f7",
+                foreground="#666666",
+                cursor="hand2",
+            )
+            handle.grid(row=0, column=0, sticky="nsw", padx=(5, 1), pady=4)
+
+            ttk.Checkbutton(
+                block,
+                variable=self.selected_columns[column_name],
+                width=0,
+            ).grid(row=0, column=1, sticky="w", padx=(0, 2), pady=4)
+
+            label = tk.Label(
+                block,
+                text=self.get_compact_column_label(column_name),
+                anchor="w",
+                background="#f7f7f7",
+                cursor="hand2",
+                font=("Segoe UI", 8),
+            )
+            label.grid(row=0, column=2, sticky="ew", padx=(0, 4), pady=4)
+
+            for widget in (block, handle, label):
+                widget.bind(
+                    "<ButtonPress-1>",
+                    lambda event, name=column_name: self.start_column_drag(
+                        event,
+                        name,
+                    ),
+                )
+                widget.bind("<ButtonRelease-1>", self.finish_column_drag)
+
+            self.column_block_frames.append((column_name, block))
+
+    def get_compact_column_label(self, column_name):
+        label = DISPLAY_COLUMNS[column_name]
+        if len(label) <= 23:
+            return label
+        return f"{label[:20]}..."
+
+    def start_column_drag(self, _event, column_name):
+        self.dragged_column = column_name
+        self.window.bind("<ButtonRelease-1>", self.finish_column_drag)
+
+    def finish_column_drag(self, event):
+        if not self.dragged_column:
+            return
+
+        target_index = self.get_column_drop_index(event.x_root, event.y_root)
+        dragged_column = self.dragged_column
+        self.dragged_column = None
+        self.window.unbind("<ButtonRelease-1>")
+
+        if dragged_column not in self.column_order:
+            return
+
+        original_index = self.column_order.index(dragged_column)
+        self.column_order.remove(dragged_column)
+        if target_index > original_index:
+            target_index -= 1
+        target_index = min(target_index, len(self.column_order))
+        self.column_order.insert(target_index, dragged_column)
+        self.render_column_blocks()
+
+    def get_column_drop_index(self, pointer_x, pointer_y):
+        rows = {}
+        for index, (_column_name, block) in enumerate(self.column_block_frames):
+            row_index = index // self.COLUMN_BLOCKS_PER_ROW
+            rows.setdefault(row_index, []).append((index, block))
+
+        for row_index in sorted(rows):
+            blocks = rows[row_index]
+            row_top = min(block.winfo_rooty() for _index, block in blocks)
+            row_bottom = max(
+                block.winfo_rooty() + block.winfo_height()
+                for _index, block in blocks
+            )
+
+            if pointer_y < row_top:
+                return blocks[0][0]
+            if pointer_y <= row_bottom:
+                for index, block in blocks:
+                    midpoint = block.winfo_rootx() + (block.winfo_width() / 2)
+                    if pointer_x < midpoint:
+                        return index
+                return blocks[-1][0] + 1
+
+        return len(self.column_block_frames)
 
     def start_bulk_query(self):
         selected = self.get_selected_columns()
@@ -1544,45 +1696,110 @@ class BulkQueryWindow:
     def get_selected_columns(self):
         return [
             column_name
-            for column_name in DISPLAY_COLUMNS
+            for column_name in self.column_order
             if self.selected_columns[column_name].get()
         ]
 
     def run_bulk_query(self, objects, release, selected_columns):
         total = len(objects)
-        for index, object_id in enumerate(objects, start=1):
-            self.query_events.put(("progress", index - 1, total, object_id))
+        processed = 0
+        for batch in chunk_sequence(objects, BULK_GAIA_BATCH_SIZE):
+            batch_label = f"{batch[0]} - {batch[-1]}" if len(batch) > 1 else batch[0]
+            self.query_events.put(("batch", processed, total, batch_label))
             try:
-                source_data = fetch_gaia_source_data(object_id, release)
-                log_missing_values(object_id, source_data)
-                derived_data = calculate_derived_data(source_data)
-                display_data = GaiaAssistApp.build_display_data(
-                    source_data,
-                    derived_data,
+                batch_data, batch_errors = fetch_gaia_source_data_batch(
+                    batch,
+                    release,
                 )
-                row = {
-                    column_name: (
-                        "-"
-                        if display_data.get(column_name) is None
-                        else str(display_data.get(column_name))
-                    )
-                    for column_name in selected_columns
-                }
             except Exception as error:
                 LOGGER.exception(
-                    "Bulk query failed for release=%s object=%s",
+                    "Bulk Gaia batch failed for release=%s batch=%s",
                     release,
-                    object_id,
+                    batch,
                 )
-                row = {column_name: "-" for column_name in selected_columns}
-                first_column = selected_columns[0]
-                row[first_column] = f"ERROR: {object_id}"
-                self.query_events.put(("row_error", object_id, str(error)))
+                batch_data, batch_errors = self.fetch_batch_sequentially(
+                    batch,
+                    release,
+                    error,
+                )
 
-            self.query_events.put(("row", row))
-            self.query_events.put(("progress", index, total, object_id))
+            worker_count = min(BULK_CALCULATION_WORKERS, max(len(batch), 1))
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = [
+                    executor.submit(
+                        self.build_bulk_result_row,
+                        object_id,
+                        release,
+                        selected_columns,
+                        batch_data,
+                        batch_errors,
+                    )
+                    for object_id in batch
+                ]
+
+                for object_id, future in zip(batch, futures):
+                    self.query_events.put(("progress", processed, total, object_id))
+                    row, error = future.result()
+                    if error is not None:
+                        self.query_events.put(("row_error", object_id, str(error)))
+
+                    processed += 1
+                    self.query_events.put(("row", row))
+                    self.query_events.put(("progress", processed, total, object_id))
 
         self.query_events.put(("done", total))
+
+    def build_bulk_result_row(
+        self,
+        object_id,
+        release,
+        selected_columns,
+        batch_data,
+        batch_errors,
+    ):
+        try:
+            if object_id in batch_errors:
+                raise batch_errors[object_id]
+            source_data = batch_data[object_id]
+            log_missing_values(object_id, source_data)
+            derived_data = calculate_derived_data(source_data)
+            display_data = GaiaAssistApp.build_display_data(
+                source_data,
+                derived_data,
+            )
+            return {
+                column_name: (
+                    "-"
+                    if display_data.get(column_name) is None
+                    else str(display_data.get(column_name))
+                )
+                for column_name in selected_columns
+            }, None
+        except Exception as error:
+            LOGGER.exception(
+                "Bulk query failed for release=%s object=%s",
+                release,
+                object_id,
+            )
+            row = {column_name: "-" for column_name in selected_columns}
+            first_column = selected_columns[0]
+            row[first_column] = f"ERROR: {object_id}"
+            return row, error
+
+    def fetch_batch_sequentially(self, batch, release, batch_error):
+        batch_data = {}
+        batch_errors = {}
+        for object_id in batch:
+            try:
+                batch_data[object_id] = fetch_gaia_source_data(object_id, release)
+            except Exception as error:
+                batch_errors[object_id] = error
+
+        if not batch_data and not batch_errors:
+            for object_id in batch:
+                batch_errors[object_id] = batch_error
+
+        return batch_data, batch_errors
 
     def process_bulk_events(self):
         if self.is_closed:
@@ -1599,6 +1816,13 @@ class BulkQueryWindow:
                     self.bulk_status.set(
                         f"Queried {completed} of {total}. Current object: {object_id}. "
                         "Large lists can take a long time."
+                    )
+                elif event_type == "batch":
+                    completed, total, batch_label = event[1], event[2], event[3]
+                    self.progress["value"] = completed
+                    self.bulk_status.set(
+                        f"Loading Gaia batch of up to {BULK_GAIA_BATCH_SIZE}: "
+                        f"{batch_label}. Completed {completed} of {total}."
                     )
                 elif event_type == "row":
                     self.result_rows.append(event[1])
@@ -2017,6 +2241,125 @@ def resolve_dr3_source_id(source_id, release):
     return str(dr3_source_id)
 
 
+def chunk_sequence(values, size):
+    for start in range(0, len(values), size):
+        yield values[start:start + size]
+
+
+def default_astrophysical_row():
+    return {
+        "classprob_dsc_combmod_quasar": None,
+        "classprob_dsc_combmod_galaxy": None,
+        "classprob_dsc_combmod_star": None,
+        "mh_gspphot": None,
+    }
+
+
+def fetch_gaia_source_data_batch(source_ids, release="DR3"):
+    resolved_pairs = []
+    errors = {}
+    for source_id in source_ids:
+        try:
+            dr3_source_id = resolve_dr3_source_id(source_id, release)
+            resolved_pairs.append((source_id, str(dr3_source_id)))
+        except Exception as error:
+            errors[source_id] = error
+
+    if not resolved_pairs:
+        return {}, errors
+
+    dr3_source_ids = sorted({dr3_source_id for _source_id, dr3_source_id in resolved_pairs})
+    id_list = ", ".join(dr3_source_ids)
+    source_query = f"""
+        SELECT
+            source_id,
+            ra,
+            dec,
+            l,
+            b,
+            pmra,
+            pmdec,
+            ra_error,
+            dec_error,
+            parallax,
+            parallax_over_error,
+            astrometric_excess_noise,
+            astrometric_excess_noise_sig,
+            ruwe,
+            phot_bp_rp_excess_factor,
+            radial_velocity,
+            phot_g_mean_mag,
+            bp_rp
+        FROM gaiadr3.gaia_source
+        WHERE source_id IN ({id_list})
+    """
+    astrophysical_query = f"""
+        SELECT
+            source_id,
+            classprob_dsc_combmod_quasar,
+            classprob_dsc_combmod_galaxy,
+            classprob_dsc_combmod_star,
+            mh_gspphot
+        FROM gaiadr3.astrophysical_parameters
+        WHERE source_id IN ({id_list})
+    """
+
+    def launch_source_query():
+        job = Gaia.launch_job_async(source_query, dump_to_file=False)
+        return job.get_results()
+
+    source_results = run_with_retries(
+        launch_source_query,
+        "ESA Gaia source table batch",
+        attempts=2,
+    )
+    source_rows = {
+        str(_clean_value(row["source_id"])): row
+        for row in source_results
+        if _clean_value(row["source_id"]) is not None
+    }
+
+    def launch_astrophysical_query():
+        job = Gaia.launch_job_async(astrophysical_query, dump_to_file=False)
+        return job.get_results()
+
+    try:
+        astrophysical_results = run_with_retries(
+            launch_astrophysical_query,
+            "ESA Gaia astrophysical parameters batch",
+            attempts=2,
+        )
+        astrophysical_rows = {
+            str(_clean_value(row["source_id"])): row
+            for row in astrophysical_results
+            if _clean_value(row["source_id"]) is not None
+        }
+    except QueryServiceError as error:
+        LOGGER.error("Gaia astrophysical parameters batch unavailable: %s", error)
+        astrophysical_rows = {}
+
+    batch_data = {}
+    for original_source_id, dr3_source_id in resolved_pairs:
+        source_row = source_rows.get(dr3_source_id)
+        if source_row is None:
+            errors[original_source_id] = QueryServiceError(
+                "ESA Gaia source table batch",
+                f"No Gaia DR3 source found for source_id {dr3_source_id}.",
+            )
+            continue
+
+        astrophysical_row = astrophysical_rows.get(
+            dr3_source_id,
+            default_astrophysical_row(),
+        )
+        batch_data[original_source_id] = build_source_data_from_gaia_rows(
+            source_row,
+            astrophysical_row,
+        )
+
+    return batch_data, errors
+
+
 def fetch_gaia_source_data(source_id, release="DR3"):
     dr3_source_id = resolve_dr3_source_id(source_id, release)
     source_query = f"""
@@ -2026,6 +2369,8 @@ def fetch_gaia_source_data(source_id, release="DR3"):
             dec,
             l,
             b,
+            pmra,
+            pmdec,
             ra_error,
             dec_error,
             parallax,
@@ -2082,15 +2427,14 @@ def fetch_gaia_source_data(source_id, release="DR3"):
 
     row = source_results[0]
     if len(astrophysical_results) == 0:
-        astrophysical_row = {
-            "classprob_dsc_combmod_quasar": None,
-            "classprob_dsc_combmod_galaxy": None,
-            "classprob_dsc_combmod_star": None,
-            "mh_gspphot": None,
-        }
+        astrophysical_row = default_astrophysical_row()
     else:
         astrophysical_row = astrophysical_results[0]
 
+    return build_source_data_from_gaia_rows(row, astrophysical_row)
+
+
+def build_source_data_from_gaia_rows(row, astrophysical_row):
     queried_source_id = _clean_value(row["source_id"])
     object_type = format_object_type_probability(astrophysical_row)
     metallicity = _clean_value(astrophysical_row["mh_gspphot"])
@@ -2098,6 +2442,8 @@ def fetch_gaia_source_data(source_id, release="DR3"):
     equatorial_coordinate_dec = _clean_value(row["dec"])
     galactic_coordinate_l = _clean_value(row["l"])
     galactic_coordinate_b = _clean_value(row["b"])
+    ra_proper_motion = _clean_value(row["pmra"])
+    dec_proper_motion = _clean_value(row["pmdec"])
     ra_error = _clean_value(row["ra_error"])
     dec_error = _clean_value(row["dec_error"])
     parallax = _clean_value(row["parallax"])
@@ -2118,6 +2464,8 @@ def fetch_gaia_source_data(source_id, release="DR3"):
         "dec": equatorial_coordinate_dec,
         "l": galactic_coordinate_l,
         "b": galactic_coordinate_b,
+        "pmra": ra_proper_motion,
+        "pmdec": dec_proper_motion,
         "ra_error": ra_error,
         "dec_error": dec_error,
         "parallax": parallax,
