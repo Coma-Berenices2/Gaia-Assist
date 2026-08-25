@@ -4,10 +4,12 @@
 
 The program takes a Gaia source ID—or, experimentally, the common name of an astronomical object—and retrieves Gaia DR3 data. It then performs additional calculations involving distance, interstellar extinction, photometry, stellar temperature, luminosity, radius, peak wavelength, and stellar classification.
 
-The application provides the results through a simple Tkinter graphical interface and can save analyzed objects as text files.
+The application provides results through a Tkinter graphical interface, includes a browser-accessible version, and can save analyzed objects or bulk query tables as text files.
 
 > **Status:** Experimental / research project  
 > **Main file:** `Main.py`
+> **Web version:** `WebMain.py`
+> **Slow hosted demo:** https://gaia-assist.onrender.com
 
 ---
 
@@ -25,6 +27,7 @@ Gaia Assist can:
   - Metallicity
   - Equatorial coordinates
   - Galactic coordinates
+  - RA and DEC proper motion
   - Coordinate uncertainties
   - Parallax
   - Parallax signal-to-noise
@@ -43,8 +46,15 @@ Gaia Assist can:
 - Estimate luminosity and radius.
 - Calculate blackbody peak wavelength using Wien's displacement law.
 - Estimate a stellar spectral/evolutionary classification using the program's HR-diagram rules.
+- Show field explanations and hover previews for result rows.
+- Let users hide Gaia data rows or derived data rows in the main result table.
 - Display warnings for potentially problematic measurements.
-- Save results to timestamped text files.
+- Select and copy displayed values.
+- Run bulk queries from pasted rows or loaded text/CSV files.
+- Arrange bulk result columns by dragging compact field blocks.
+- Process Gaia source-table lookups in batches of 20 for faster bulk querying.
+- View bulk results in a sheet-like table with 10, 20, or 30 rows per page.
+- Save single-object results and combined bulk results to timestamped text files.
 - Maintain a missing-value log and debug log.
 
 The main calculation pipeline follows the sequence of quality checks → distance → dust extinction → reddening correction → magnitudes → temperature → luminosity/radius → peak wavelength → stellar classification.
@@ -83,6 +93,8 @@ pip install astropy astroquery requests
 ```text
 GaiaAssist/
 ├── Main.py
+├── WebMain.py
+├── Requirement.txt
 ├── README.md
 └── saved_objects/          # created automatically when results are saved
 ```
@@ -105,14 +117,47 @@ The program will open the **Gaia Assist** graphical interface.
 
 The application creates its GUI with Tkinter and starts the program through `main()`, which initializes the `GaiaAssistApp` window and enters the Tkinter event loop.
 
----
-Install the required dependencies
+### Install the required dependencies
 
 After installing Python, open a terminal in the Gaia Assist folder and run:
 
-pip install -r requirements.txt
+```bash
+pip install -r Requirement.txt
+```
 
 This will install the external Python packages required by Gaia Assist.
+
+---
+
+# Running the web version
+
+Gaia Assist also includes a local browser version:
+
+```bash
+python WebMain.py
+```
+
+The server prints the exact local URL to open, for example:
+
+```text
+Gaia Assist Web is running at http://127.0.0.1:65000/
+```
+
+You may also choose a port manually:
+
+```bash
+python WebMain.py 53021
+```
+
+If the chosen port is busy, the web server attempts to fall back to an available port and prints the final URL.
+
+A slow hosted version is available at:
+
+```text
+https://gaia-assist.onrender.com
+```
+
+The hosted version may respond slowly because it depends on remote Gaia, Sesame, and dust-map services, and because free/hosted web services can take time to wake up.
 
 ---
 
@@ -170,6 +215,40 @@ The program first queries **CDS Sesame**. If Sesame returns a Gaia identifier, t
 ### Important
 
 The common-name functionality is explicitly labeled **testing** in the program and should not be considered as reliable as directly entering a Gaia source ID.
+
+---
+
+## 4. Hiding result groups
+
+The main result table includes two visibility controls:
+
+- **Hide Gaia Data** hides raw values queried directly from Gaia.
+- **Hide Derived Data** hides values calculated by Gaia Assist.
+
+These controls only affect what is displayed in the main window. They do not change the underlying query or calculation pipeline.
+
+---
+
+# Bulk queries
+
+The desktop and web versions include a bulk query workflow for analyzing many objects together.
+
+Bulk query supports:
+
+- Pasting many object IDs or names into a large input box.
+- Loading object rows from a `.txt` or `.csv` file.
+- One object per row.
+- A single input mode for the entire list: `DR3`, `DR2`, `DR1`, or `Common Name (Testing)`.
+- Choosing which result fields to include.
+- Dragging compact field blocks to control the final column order.
+- Displaying results in a sheet-like table.
+- Viewing 10, 20, or 30 objects per page.
+- Copying table values.
+- Saving all displayed bulk results into one timestamped file.
+
+For speed, Gaia Assist processes Gaia source-table lookups in batches of 20 when possible. It also runs several per-source derived calculations in parallel. DR3 source IDs benefit the most from batching. DR2, DR1, and common-name inputs still require additional resolution steps before the final DR3 data can be queried.
+
+Bulk queries can still take a long time because Gaia Assist may need to contact the ESA Gaia Archive, CDS Sesame, and the NADC dust calculator many times.
 
 ---
 
@@ -394,6 +473,8 @@ The saved file contains:
 - Values
 - Units
 
+Bulk query saves create a combined timestamped file containing all displayed result rows and the selected output columns.
+
 
 
 ---
@@ -494,6 +575,8 @@ The current project is intentionally simple:
 GaiaAssist/
 │
 ├── Main.py
+├── WebMain.py
+├── Requirement.txt
 ├── README.md
 │
 └── saved_objects/
@@ -501,7 +584,9 @@ GaiaAssist/
     └── ...
 ```
 
-`Main.py` currently contains the GUI, Gaia queries, external-service communication, quality checks, calculations, classification rules, and result-saving logic.
+`Main.py` contains the desktop GUI, Gaia queries, external-service communication, quality checks, calculations, classification rules, bulk-query logic, and result-saving logic.
+
+`WebMain.py` provides a browser-accessible interface that reuses the calculation and query logic from `Main.py`.
 
 ---
 
