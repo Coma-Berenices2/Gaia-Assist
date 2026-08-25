@@ -1,0 +1,4 @@
+# Direct third-party dependencies used by Gaia Assist.
+astropy
+astroquery
+requests

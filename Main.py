@@ -3,17 +3,37 @@ import queue
 import re
 import threading
 import time
-import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from math import cos, log10, pi, radians, sqrt
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
 
 import astropy.units as u
 import requests
 from astropy.coordinates import SkyCoord
 from astroquery.gaia import Gaia
+
+
+tk = None
+filedialog = None
+messagebox = None
+ttk = None
+
+
+def load_desktop_gui():
+    global tk, filedialog, messagebox, ttk
+    if tk is not None:
+        return
+
+    import tkinter as tk_module
+    from tkinter import filedialog as filedialog_module
+    from tkinter import messagebox as messagebox_module
+    from tkinter import ttk as ttk_module
+
+    tk = tk_module
+    filedialog = filedialog_module
+    messagebox = messagebox_module
+    ttk = ttk_module
 
 
 GAIA_COLUMNS = {
@@ -3352,6 +3372,7 @@ def _clean_value(value):
 
 
 def main():
+    load_desktop_gui()
     root = tk.Tk()
     GaiaAssistApp(root)
     root.mainloop()

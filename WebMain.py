@@ -14,8 +14,9 @@ from urllib.parse import parse_qs, urlparse
 import Main
 
 
-HOST = "127.0.0.1"
-PORT = int(os.environ.get("GAIA_ASSIST_PORT", "65000"))
+HOST = os.environ.get("HOST", "0.0.0.0")
+PORT = int(os.environ.get("PORT", os.environ.get("GAIA_ASSIST_PORT", "65000")))
+RENDER_ASSIGNED_PORT = "PORT" in os.environ
 
 
 def build_display_data(source_data, derived_data):
@@ -495,7 +496,7 @@ def make_page():
 </head>
 <body>
   <main>
-    <h1>Gaia Assist</h1>
+    <h1>Gaia Assist 1.1</h1>
     <p class="subtle">Fetch core astrometric and photometric values from ESA Gaia.</p>
 
     <form id="queryForm" class="controls">
@@ -1219,13 +1220,16 @@ def main():
     except OSError as error:
         if error.errno not in (10048, 98):
             raise
+        if RENDER_ASSIGNED_PORT:
+            raise
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind((HOST, 0))
             port = probe.getsockname()[1]
         server = ThreadingHTTPServer((HOST, port), GaiaAssistWebHandler)
 
     port = server.server_address[1]
-    url = f"http://{HOST}:{port}/"
+    display_host = "localhost" if HOST in ("0.0.0.0", "::") else HOST
+    url = f"http://{display_host}:{port}/"
     print(f"Gaia Assist Web is running at {url}", flush=True)
     server.serve_forever()
 
