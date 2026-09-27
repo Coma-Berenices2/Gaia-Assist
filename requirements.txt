@@ -2,3 +2,5 @@
 astropy
 astroquery
 requests
+matplotlib
+numpy

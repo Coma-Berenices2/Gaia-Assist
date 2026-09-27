@@ -1,0 +1,17 @@
+# Scientist 2.4: local Explorer comparisons and radius estimates
+
+Explorer (`Main.py` and `WebMain.py`) is unchanged. Fresh Scientist queries now calculate three separate `explorer_comparison_*` fields, using the original Explorer temperature branches, G-band luminosity/radius constants and classification rules. These approximate ordinary-star equivalents use already available inputs, including raw Gaia metallicity when present. They do not replace the adopted temperature or chemical identification. No additional catalogue or dust requests are made for them.
+
+Corrected colour and absolute G are used when available. Otherwise, observed colour and uncorrected absolute G can provide explicitly labelled comparisons. Unknown extinction is not filled with zero. Existing Scientist distance eligibility remains in force; the new calculations do not manufacture a distance to obtain a radius.
+
+`radius_approx_solar` uses `10**(0.2*(4.67-M_G)) * (5772/T_adopted)**2`. It requires finite absolute G and finite positive adopted temperature. Its own fields record the absolute G used, temperature source, extinction assumptions and review notes. Gaia A_G can be used even if Gaia colour reddening is absent. No uncertainty is fabricated. Carbon-rich spectra and existing temperature applicability concerns remain flagged.
+
+`radius` remains the bolometric radius. The calculation accepts a locally supplied finite `bc_g = Mbol - MG` only with `bc_g_applicable=True` and a nonempty `bc_g_source`, plus valid corrected magnitude and adopted temperature. These inputs assert that the correction has been vetted for the object, passband and adopted parameters; availability alone is insufficient. With solar Mbol 4.74, bolometric luminosity is `10**(-0.4*(MG+BC_G-4.74))`, and Stefan–Boltzmann gives `sqrt(L/L_sun)*(5772/T)**2`. No new bolometric-correction catalogue or default correction is introduced. When these conditions are unmet, the separate G-band approximation remains visible.
+
+Historical `legacy_*` values remain historical. Loading files does not recalculate them or populate fresh comparison fields. Empty historical fields are hidden in the main display, while populated historical values remain accessible. Existing save files are not rewritten.
+
+The display groups adopted temperature and radius first, then classification, comparison estimates, distance, photometry/extinction, quality checks, coordinates/motion and carbon-identification details. Long values are abbreviated on screen. Explain mode opens the full value in a scrollable window/dialog; Copy mode offers a full-text hover preview. Desktop Copy selection retains the elided text. Web CSS truncation retains the original text for selection. Bulk cells also expose full values, and exports store full precision rather than display rounding.
+
+Desktop and web support single and bulk saves. The web interface now also loads saved JSON, CSV and TXT results without querying or recalculation. JSON remains the preferred full record format, including nested settings and bulk metadata.
+
+Validation: 112 automated tests, including parity with original Explorer branches, valid/invalid radius inputs, missing versus supplied extinction, bolometric-correction gating, carbon-star separation, desktop full-text copying, historical records and JSON/CSV/TXT/web reload. Generated browser JavaScript is syntax checked. The web page was also opened successfully in the in-app browser; a full interactive browser end-to-end run was not completed.

@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Scientist raw catalogue/dust cache and local preferences
+scientist_cache.sqlite3*
+scientist_network_settings.json
+
+# Local Gaia query outputs (never publish user results)
+saved_objects/
+saved_objects_temperature/
+gaia_missing_values_log.txt
+temperature_missing_values_log.txt

@@ -1,0 +1,78 @@
+{
+  "verified_date": "2026-09-23",
+  "endpoint": "https://gea.esac.esa.int/tap-server/tap",
+  "results": [
+    {
+      "query": "SELECT column_name, datatype, unit, description FROM TAP_SCHEMA.columns WHERE table_name='external.gaiaedr3_distance'",
+      "rows": [
+        {
+          "column_name": "r_med_geo",
+          "datatype": "float",
+          "unit": "pc",
+          "description": "The median of the geometric distance posterior. The geometric distance estimate."
+        },
+        {
+          "column_name": "r_lo_geo",
+          "datatype": "float",
+          "unit": "pc",
+          "description": "The 16th percentile of the geometric distance posterior. The lower 1-sigma-like bound on the confidence interval."
+        },
+        {
+          "column_name": "r_hi_geo",
+          "datatype": "float",
+          "unit": "pc",
+          "description": "The 84th percentile of the geometric distance posterior. The upper 1-sigma-like bound on the confidence interval."
+        },
+        {
+          "column_name": "r_med_photogeo",
+          "datatype": "float",
+          "unit": "pc",
+          "description": "The median of the photogeometric distance posterior. The photogeometric distance estimate."
+        },
+        {
+          "column_name": "r_lo_photogeo",
+          "datatype": "float",
+          "unit": "pc",
+          "description": "The 16th percentile of the photogeometric distance posterior. The lower 1-sigma-like bound on the confidence interval."
+        },
+        {
+          "column_name": "r_hi_photogeo",
+          "datatype": "float",
+          "unit": "pc",
+          "description": "The 84th percentile of the photogeometric distance posterior. The upper 1-sigma-like bound on the confidence interval."
+        },
+        {
+          "column_name": "flag",
+          "datatype": "char",
+          "unit": null,
+          "description": "Additional information on the solution. Do not use for filtering (see table note in the reference URL)."
+        },
+        {
+          "column_name": "source_id",
+          "datatype": "long",
+          "unit": null,
+          "description": "Unique source identifier. Note that this *cannot* be matched against the DR1 or DR2 source_ids."
+        }
+      ]
+    },
+    {
+      "query": "SELECT source_id, r_med_geo, r_lo_geo, r_hi_geo, flag FROM external.gaiaedr3_distance WHERE source_id IN (1542553623374596352,5891675303053080704)",
+      "rows": [
+        {
+          "source_id": "5891675303053080704",
+          "r_med_geo": 707.51666,
+          "r_lo_geo": 696.3901,
+          "r_hi_geo": 717.71704,
+          "flag": "10033"
+        },
+        {
+          "source_id": "1542553623374596352",
+          "r_med_geo": 314.0529,
+          "r_lo_geo": 296.1741,
+          "r_hi_geo": 330.8101,
+          "flag": "10033"
+        }
+      ]
+    }
+  ]
+}

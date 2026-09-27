@@ -1,0 +1,60 @@
+{
+  "timestamp_utc": "2026-09-21T20:54:37Z",
+  "notes": "Single pass, sequential cold client calls; server cache/load uncontrolled. Timeouts are censored timings, not server completion times.",
+  "results": [
+    {
+      "mode": "sync",
+      "kind": "source",
+      "ids": 1,
+      "limit_seconds": 15,
+      "status": "success",
+      "rows": 1,
+      "elapsed_seconds": 7.942
+    },
+    {
+      "mode": "async",
+      "kind": "source",
+      "ids": 1,
+      "limit_seconds": 15,
+      "status": "QueryTimeout",
+      "detail": "HTTPSConnectionPool(host='gea.esac.esa.int', port=443): Read timed out. (read timeout=8)",
+      "elapsed_seconds": 8.707
+    },
+    {
+      "mode": "sync",
+      "kind": "joined",
+      "ids": 1,
+      "limit_seconds": 15,
+      "status": "success",
+      "rows": 1,
+      "elapsed_seconds": 9.474
+    },
+    {
+      "mode": "async",
+      "kind": "joined",
+      "ids": 1,
+      "limit_seconds": 15,
+      "status": "QueryTimeout",
+      "detail": "HTTPSConnectionPool(host='gea.esac.esa.int', port=443): Read timed out. (read timeout=8)",
+      "elapsed_seconds": 8.701
+    },
+    {
+      "mode": "sync",
+      "kind": "joined",
+      "ids": 2,
+      "limit_seconds": 15,
+      "status": "QueryTimeout",
+      "detail": "HTTPSConnectionPool(host='gea.esac.esa.int', port=443): Read timed out. (read timeout=8)",
+      "elapsed_seconds": 8.71
+    },
+    {
+      "mode": "async",
+      "kind": "joined",
+      "ids": 2,
+      "limit_seconds": 15,
+      "status": "QueryTimeout",
+      "detail": "HTTPSConnectionPool(host='gea.esac.esa.int', port=443): Read timed out. (read timeout=8)",
+      "elapsed_seconds": 8.71
+    }
+  ]
+}

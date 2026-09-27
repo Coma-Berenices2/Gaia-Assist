@@ -1,0 +1,42 @@
+{
+  "timestamp_utc": "2026-09-21T21:08:24Z",
+  "notes": "Single pass, sequential cold client calls; server cache/load uncontrolled. Timeouts are censored timings, not server completion times.",
+  "results": [
+    {
+      "mode": "sync",
+      "kind": "joined",
+      "ids": 2,
+      "limit_seconds": 15,
+      "status": "success",
+      "rows": 2,
+      "elapsed_seconds": 6.51
+    },
+    {
+      "mode": "async",
+      "kind": "joined",
+      "ids": 2,
+      "limit_seconds": 15,
+      "status": "QueryTimeout",
+      "detail": "Overall query time limit reached",
+      "elapsed_seconds": 16.729
+    },
+    {
+      "mode": "sync",
+      "kind": "joined",
+      "ids": 20,
+      "limit_seconds": 15,
+      "status": "success",
+      "rows": 20,
+      "elapsed_seconds": 7.818
+    },
+    {
+      "mode": "async",
+      "kind": "joined",
+      "ids": 20,
+      "limit_seconds": 15,
+      "status": "QueryTimeout",
+      "detail": "Overall query time limit reached",
+      "elapsed_seconds": 16.713
+    }
+  ]
+}

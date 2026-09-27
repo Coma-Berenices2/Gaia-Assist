@@ -1,9 +1,11 @@
 import logging
+import scientist_network as network
 import queue
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from datetime import datetime
 from math import cos, isfinite, log10, pi, radians, sqrt
 from pathlib import Path
@@ -11,7 +13,14 @@ from pathlib import Path
 import astropy.units as u
 import requests
 from astropy.coordinates import SkyCoord
-from astroquery.gaia import Gaia
+from temperature_model import VERSION, TemperatureOptions, bounds, evaluate_temperatures, number
+from temperature_reference import magnitude_error
+from scientist_distance import DISPLAY_ORDER as DISTANCE_DISPLAY_ORDER, evaluate_distance, baseline_diagnostics
+from temperature_schema import (
+    AP_FIELDS, PHOTOMETRY_FIELDS, GAIA_FIELDS, DERIVED_FIELDS,
+    UNITS as TEMPERATURE_UNITS, EXPLANATIONS as TEMPERATURE_EXPLANATIONS,
+    TEMPERATURE_DISPLAY_ORDER, TEMPERATURE_DETAIL_FIELDS, format_display_value, empty_historical, compact_text, format_export_value,
+)
 #above
 
 tk = None
@@ -88,34 +97,25 @@ DERIVED_COLUMNS = {
     "star_type": "Star Type",
 }
 
+GAIA_COLUMNS.update(GAIA_FIELDS)
+DERIVED_COLUMNS.update(DERIVED_FIELDS)
+DERIVED_COLUMNS.update(effective_temperature="Adopted Temperature", luminosity="G-band Solar Brightness Ratio", radius="Bolometric Radius", visual_absolute_magnitude="Estimated Visual Absolute Magnitude", visual_apparent_magnitude="Estimated Visual Apparent Magnitude", star_type="Estimated Star Type")
 ALL_DISPLAY_COLUMNS = {**GAIA_COLUMNS, **DERIVED_COLUMNS}
 
 PRIMARY_DISPLAY_ORDER = (
-    "source_id",
-    "object_type",
-    "ra_hms_dec",
-    "constellation",
-    "distance_lightyears",
-    "distance_parsecs",
-    "absolute_magnitude",
-    "visual_absolute_magnitude",
-    "visual_apparent_magnitude",
-    "luminosity",
-    "effective_temperature",
-    "radius",
-    "peak_wavelength",
-    "ra_correctness",
-    "dec_correctness",
-    "parallax_data_status",
-    "ruwe_correctness",
-    "bp_rp_excess_correctness",
-    "parallax_correctness",
-    "excess_noise_factor",
-    "excess_noise_significance",
-    "star_type",
-    "corrected_excess_flux",
+    "source_id", "object_type", *TEMPERATURE_DISPLAY_ORDER,
+    *DISTANCE_DISPLAY_ORDER, "distance_parsecs", "distance_lightyears", "parallax", "parallax_error", "parallax_over_error",
+    "parallax_correctness", "parallax_data_status",
+    "phot_g_mean_mag", "phot_bp_mean_mag", "phot_rp_mean_mag", "bp_rp", "new_bp_rp",
+    "absolute_magnitude", "visual_absolute_magnitude", "visual_apparent_magnitude", "luminosity", "peak_wavelength",
+    "mean_g_band_extinction", "bp_rp_reddening", "ebv", "extinction_source", "extinction_status",
+    "ruwe", "ruwe_correctness", "phot_bp_rp_excess_factor", "corrected_excess_flux", "bp_rp_excess_correctness", "photometry_status",
+    "ra_hms_dec", "constellation", "ra", "ra_error", "ra_correctness", "dec", "dec_error", "dec_correctness", "l", "b",
+    "pmra", "pmdec", "radial_velocity", "radial_velocity_error",
+    "astrometric_excess_noise", "astrometric_excess_noise_sig", "excess_noise_factor", "excess_noise_significance",
+    "carbon_star_badge", "carbon_star_status", "ordinary_star_equivalent", "carbon_review_reason",
+    "carbon_identification_source", "carbon_reference",
 )
-
 DISPLAY_COLUMNS = {
     column_name: ALL_DISPLAY_COLUMNS[column_name]
     for column_name in PRIMARY_DISPLAY_ORDER
@@ -134,9 +134,9 @@ SECONDARY_DISPLAY_COLUMNS = tuple(
     if column_name not in PRIMARY_DISPLAY_ORDER
 )
 
-MISSING_VALUES_LOG = Path(__file__).with_name("gaia_missing_values_log.txt")
-DEBUG_LOG = Path(__file__).with_name("gaia_assist_debug.log")
-SAVED_OBJECTS_DIR = Path(__file__).with_name("saved_objects")
+MISSING_VALUES_LOG = Path(__file__).with_name("temperature_missing_values_log.txt")
+DEBUG_LOG = Path(__file__).with_name("temperature_debug.log")
+SAVED_OBJECTS_DIR = Path(__file__).with_name("saved_objects_temperature")
 DUST_CALCULATOR_URL = "https://nadc.china-vo.org/data/dustmaps/calculator"
 ESASKY_IMAGE_URL = "https://sky.esa.int/esasky-tap/skyimage"
 ESASKY_DSS2_HIPS_URL = "https://skies.esac.esa.int/DSSColor"
@@ -145,7 +145,7 @@ SKY_IMAGE_FOV_ARCMIN = 5.0
 SKY_IMAGE_SIZE = 600
 COMMON_NAME_RELEASE = "Common Name (Testing)"
 BULK_GAIA_BATCH_SIZE = 20
-BULK_CALCULATION_WORKERS = 5
+BULK_CALCULATION_WORKERS = 3
 SESAME_URLS = (
     "https://cds.unistra.fr/cgi-bin/nph-sesame/-oxpI/SNV?{name}",
     "https://cdsweb.u-strasbg.fr/cgi-bin/nph-sesame/-oxpI/SNV?{name}",
@@ -155,7 +155,7 @@ SOLAR_LUMINOSITY_WATTS = 3.828e26
 SOLAR_RADIUS_METERS = 6.957e8
 WIEN_DISPLACEMENT_CONSTANT = 2.897771955e-3
 
-LOGGER = logging.getLogger("gaia_assist")
+LOGGER = logging.getLogger("gaia_assist_temperature")
 if not LOGGER.handlers:
     LOGGER.setLevel(logging.INFO)
     debug_handler = logging.FileHandler(DEBUG_LOG, encoding="utf-8")
@@ -172,27 +172,13 @@ class QueryServiceError(RuntimeError):
 
 
 def run_with_retries(operation, service, attempts=3):
-    for attempt in range(1, attempts + 1):
+    with network.timed(service):
         try:
-            LOGGER.info("%s request attempt %d/%d", service, attempt, attempts)
-            result = operation()
-            LOGGER.info("%s request succeeded", service)
-            return result
+            return operation()
+        except (network.QueryCancelled, network.QueryTimeout):
+            raise
         except Exception as error:
-            LOGGER.warning(
-                "%s request attempt %d/%d failed: %s",
-                service,
-                attempt,
-                attempts,
-                error,
-                exc_info=True,
-            )
-            if attempt == attempts:
-                raise QueryServiceError(
-                    service,
-                    f"{service} failed after {attempts} attempts: {error}",
-                ) from error
-            time.sleep(2 ** (attempt - 1))
+            raise QueryServiceError(service, str(error)) from error
 
 
 def sky_image_coordinates(ra, dec):
@@ -425,17 +411,40 @@ FIELD_UNITS = {
 }
 
 
+FIELD_UNITS.update(TEMPERATURE_UNITS)
+FIELD_EXPLANATIONS.update(TEMPERATURE_EXPLANATIONS)
+HELP_TUTORIAL = (
+    "TEMPERATURE EXPERIMENT\n\n"
+    "Both Gaia GSP-Phot and BP-RP temperatures remain visible. Adopted Temperature drives "
+    "the estimated classification; read its source, reason and review status.\n\n"
+    "Temperature Settings apply to subsequent single and bulk queries. Rerun a source "
+    "after changing settings. Solar composition is assumed unless you explicitly provide "
+    "trusted Fe/H or choose the uncalibrated Gaia override. Missing reddening is not zero.\n\n"
+    "Save writes a text table and a matching JSON file containing full data, assumptions "
+    "and flags in saved_objects_temperature. Keep the JSON for complete round trips. "
+    "Load Saved Results reads new JSON or old text files without recalculating or changing originals. "
+    "Old temperatures and radii are labelled legacy rather than silently adopted.\n\n"
+    "Cluster charts count estimated, tentative, approximate and unclassified objects separately. "
+    "These classifications and photometric screens do not establish cluster membership. "
+    "Bolometric radius is unavailable without a suitable bolometric correction.\n\n"
+    + HELP_TUTORIAL
+)
+
+
 class GaiaAssistApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Gaia Assist")
-        self.root.geometry("720x520")
-        self.root.minsize(680, 460)
+        self.root.title("Gaia Assist — Scientist")
+        self.temperature_options = TemperatureOptions()
+        self.current_record = None
+        self.root.geometry("1050x720")
+        self.root.minsize(900, 520)
 
         self.gaia_code = tk.StringVar()
         self.gaia_release = tk.StringVar(value="DR3")
         self.hide_gaia_data = tk.BooleanVar(value=False)
         self.hide_derived_data = tk.BooleanVar(value=False)
+        self.show_temperature_details = tk.BooleanVar(value=False)
         self.field_name_mode = tk.StringVar(value="Explain")
         self.status = tk.StringVar(value="Enter a Gaia source_id to begin.")
         self.result_vars = {
@@ -449,6 +458,9 @@ class GaiaAssistApp:
         self.result_background = style.lookup("TFrame", "background") or self.root.cget("background")
         self.result_foreground = style.lookup("TLabel", "foreground") or "black"
         self.query_in_progress = False
+        self.query_generation = 0
+        self.query_cancel = threading.Event()
+        self.force_refresh = tk.BooleanVar(value=False)
         self.query_events = queue.Queue()
         self.sky_image_request_id = 0
         self.sky_image_coordinates = None
@@ -465,6 +477,8 @@ class GaiaAssistApp:
         self.underline_value_font = ("Segoe UI", 10, "underline")
 
         self._build_interface()
+        self.root.protocol("WM_DELETE_WINDOW", self.close_app)
+        self.update_row_visibility()
         self.root.after(100, self.process_query_events)
 
     def _build_interface(self):
@@ -475,7 +489,7 @@ class GaiaAssistApp:
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
 
-        title = ttk.Label(header, text="Gaia Assist", font=("Segoe UI", 20, "bold"))
+        title = ttk.Label(header, text="Gaia Assist · Scientist", font=("Segoe UI", 17, "bold"))
         title.grid(row=0, column=0, sticky="w")
         ttk.Button(
             header,
@@ -485,7 +499,7 @@ class GaiaAssistApp:
 
         subtitle = ttk.Label(
             header,
-            text="Fetch core astrometric and photometric values from ESA Gaia DR3.",
+            text="Temperature estimates with methods, uncertainties and review notes.",
             font=("Segoe UI", 10),
         )
         subtitle.grid(row=1, column=0, sticky="w", pady=(4, 0))
@@ -557,6 +571,10 @@ class GaiaAssistApp:
             command=self.update_row_visibility,
         ).grid(row=2, column=1, sticky="w", padx=(145, 0), pady=(8, 0))
 
+        ttk.Checkbutton(input_frame, text="Calculation details", style="Toolbutton",
+                        variable=self.show_temperature_details,
+                        command=self.update_row_visibility).grid(row=2, column=2, sticky="e", pady=(8, 0))
+
         self.status_label = ttk.Label(
             self.root,
             textvariable=self.status,
@@ -568,6 +586,14 @@ class GaiaAssistApp:
         action_frame = ttk.Frame(self.root, padding=(24, 0, 24, 14))
         action_frame.grid(row=4, column=0, sticky="ew")
         action_frame.columnconfigure(0, weight=1)
+        ttk.Button(action_frame, text="Temperature Settings", command=self.open_temperature_settings).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        controls = ttk.Frame(action_frame)
+        controls.grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        ttk.Checkbutton(controls, text="Force refresh (ignore cache)", variable=self.force_refresh).pack(side="left")
+        ttk.Button(controls, text="Distance Settings", command=self.open_distance_settings).pack(side="left", padx=8)
+        ttk.Button(controls, text="Network Settings", command=self.open_network_settings).pack(side="left", padx=8)
+        ttk.Button(controls, text="Cancel Query", command=self.cancel_query).pack(side="left")
+        ttk.Button(action_frame, text="Load Saved Results", command=self.load_saved_results).grid(row=2, column=1, columnspan=2, sticky="e", pady=(8, 0))
         self.sky_image_button = ttk.Button(
             action_frame,
             text="Show Sky Image",
@@ -684,6 +710,7 @@ class GaiaAssistApp:
             field_label = ttk.Label(
                 field_frame,
                 text=label,
+                wraplength=310,
                 font=self.normal_value_font,
                 cursor="hand2",
             )
@@ -754,6 +781,38 @@ class GaiaAssistApp:
             self.copy_table_container.grid_remove()
             self.explain_table_container.grid()
 
+    def open_temperature_settings(self):
+        from temperature_ui import open_settings
+        open_settings(self)
+
+    def open_distance_settings(self):
+        from temperature_ui import open_distance_settings
+        open_distance_settings(self)
+
+    def open_network_settings(self):
+        from temperature_ui import open_network_settings
+        open_network_settings(self)
+
+    def cancel_query(self):
+        self.query_cancel.set()
+        self.status.set("Cancelling query; displayed results retained.")
+
+    def close_app(self):
+        self.query_cancel.set()
+        self.query_generation += 1
+        network.cancel_all()
+        deadline = time.monotonic()+4
+        def finish_close():
+            if network.active_queries() and time.monotonic() < deadline:
+                self.root.after(50, finish_close)
+            else:
+                self.root.destroy()
+        finish_close()
+
+    def load_saved_results(self):
+        from temperature_ui import load_saved_results
+        load_saved_results(self)
+
     def refresh_copy_table(self):
         if not hasattr(self, "copy_table") or self.field_name_mode.get() != "Copy":
             return
@@ -765,21 +824,47 @@ class GaiaAssistApp:
             if not (
                 (self.hide_gaia_data.get() and key in GAIA_COLUMNS)
                 or (self.hide_derived_data.get() and key in DERIVED_COLUMNS)
+                or (self.is_detail_field(key) and not self.show_temperature_details.get())
+                or empty_historical(key, self.result_vars[key].get())
             )
         ]
         font = tkfont.Font(root=self.root, font=self.normal_value_font)
         heading_font = tkfont.Font(root=self.root, font=("Segoe UI", 10, "bold"))
         field_width = max([heading_font.measure("Field")] + [font.measure(row[0]) for row in rows]) + 24
-        value_width = max([heading_font.measure("Value")] + [font.measure(row[1]) for row in rows]) + 24
+        value_width = max([heading_font.measure("Value")] + [font.measure(compact_text(row[1])) for row in rows]) + 24
         self.copy_table.configure(state="normal", tabs=(field_width, field_width + value_width))
         self.copy_table.delete("1.0", "end")
         self.copy_table.insert("end", "Field\tValue\tUnit\n", "heading")
-        self.copy_table.insert("end", "\n".join("\t".join(row) for row in rows))
+        self.copy_full_values = {}
+        self.copy_hover_line = None
+        self.copy_table.tag_configure("hidden_tail", elide=True)
+        for label, value, unit in rows:
+            line = int(self.copy_table.index("end-1c").split(".")[0])
+            self.copy_full_values[line] = value
+            self.copy_table.insert("end", label + "\t")
+            short = compact_text(value)
+            if short != value:
+                self.copy_table.insert("end", value[:61])
+                self.copy_table.insert("end", "...", "ellipsis")
+                self.copy_table.insert("end", value[61:], "hidden_tail")
+            else:
+                self.copy_table.insert("end", value)
+            self.copy_table.insert("end", "\t" + unit + "\n")
+        self.copy_table.bind("<Motion>", self.preview_copy_value)
+        self.copy_table.bind("<Leave>", lambda _e: (self.hide_field_preview(), setattr(self, "copy_hover_line", None)))
+        self.copy_table.bind("<<Copy>>", self.copy_selected_table)
+        self.copy_table.bind("<Control-c>", self.copy_selected_table)
         self.copy_table.configure(state="disabled")
 
     def select_all_copy_table(self, _event=None):
         self.copy_table.tag_add("sel", "1.0", "end-1c")
         return "break"
+
+    def is_detail_field(self, key):
+        record = self.current_record or {}
+        if key in ("distance_parsecs", "distance_lightyears") and record.get("adopted_distance_pc") is None and record.get(key) is not None:
+            return False  # Keep historical distance visible without relabelling it.
+        return key in TEMPERATURE_DETAIL_FIELDS
 
     def update_row_visibility(self):
         hide_gaia_rows = self.hide_gaia_data.get()
@@ -789,6 +874,8 @@ class GaiaAssistApp:
             should_hide = (
                 (column_name in GAIA_COLUMNS and hide_gaia_rows)
                 or (column_name in DERIVED_COLUMNS and hide_derived_rows)
+                or (self.is_detail_field(column_name) and not self.show_temperature_details.get())
+                or empty_historical(column_name, self.result_vars[column_name].get())
             )
             for widget in self.row_widgets[column_name]:
                 if should_hide:
@@ -903,7 +990,7 @@ class GaiaAssistApp:
 
         self.set_copyable_value_text(value_widget, display_value)
 
-    def create_copyable_value_widget(self, parent, cursor="xterm", width=34):
+    def create_copyable_value_widget(self, parent, cursor="xterm", width=46):
         value_widget = tk.Text(
             parent,
             height=1,
@@ -922,10 +1009,55 @@ class GaiaAssistApp:
         return value_widget
 
     def set_copyable_value_text(self, value_widget, display_value):
-        value_widget.configure(state="normal")
+        full_text = str(display_value)
+        short = compact_text(full_text, int(value_widget.cget("width")))
+        value_widget.configure(state="normal", wrap="none", height=1)
         value_widget.delete("1.0", "end")
-        value_widget.insert("1.0", display_value)
+        value_widget.insert("1.0", short)
         value_widget.configure(state="disabled")
+        value_widget.bind("<ButtonRelease-1>", lambda _e: self.show_full_value(full_text) if short != full_text else None)
+        value_widget.configure(cursor="hand2" if short != full_text else "xterm")
+
+    def show_full_value(self, text):
+        self.show_centered_message_window("Full result value", text, 720, 440)
+
+    def show_value_preview(self, event, text):
+        self.hide_field_preview()
+        preview = tk.Toplevel(self.root)
+        preview.wm_overrideredirect(True)
+        preview.attributes("-topmost", True)
+        label = tk.Label(preview, text=text, wraplength=620, justify="left",
+                         background="#172033", foreground="white", padx=10, pady=8)
+        label.pack()
+        preview.update_idletasks()
+        x = min(event.x_root, preview.winfo_screenwidth()-preview.winfo_reqwidth()-8)
+        y = min(event.y_root+22, preview.winfo_screenheight()-preview.winfo_reqheight()-8)
+        preview.geometry(f"+{max(0, x)}+{max(0, y)}")
+        self.field_preview_window = preview
+
+    def preview_copy_value(self, event):
+        line = int(self.copy_table.index(f"@{event.x},{event.y}").split(".")[0])
+        text = getattr(self, "copy_full_values", {}).get(line)
+        if getattr(self, "copy_hover_line", None) == line:
+            return
+        self.copy_hover_line = line
+        self.hide_field_preview()
+        if text and compact_text(text) != text:
+            self.show_value_preview(event, text)
+
+    def copy_selected_table(self, _event=None):
+        try:
+            start, end = self.copy_table.index("sel.first"), self.copy_table.index("sel.last")
+        except tk.TclError:
+            return "break"
+        # Elided tails remain selected and copy in full; omit display-only dots.
+        pieces = []
+        for kind, value, index in self.copy_table.dump(start, end, text=True):
+            if kind == "text" and "ellipsis" not in self.copy_table.tag_names(index):
+                pieces.append(value)
+        self.root.clipboard_clear()
+        self.root.clipboard_append("".join(pieces))
+        return "break"
 
     def update_excess_noise_factor_value(self, display_value):
         widget_info = self.result_value_widgets["excess_noise_factor"]
@@ -1120,7 +1252,7 @@ class GaiaAssistApp:
         message_window.geometry(
             f"{window_width}x{window_height}+{position_x}+{position_y}"
         )
-        message_window.resizable(False, False)
+        message_window.resizable(True, True)
         message_window.transient(self.root)
         message_window.grab_set()
 
@@ -1136,6 +1268,9 @@ class GaiaAssistApp:
         )
         message_text.insert("1.0", message)
         message_text.configure(state="disabled")
+        scroll = ttk.Scrollbar(message_window, command=message_text.yview)
+        scroll.pack(side="right", fill="y")
+        message_text.configure(yscrollcommand=scroll.set)
         message_text.pack(fill="both", expand=True)
 
         ttk.Button(
@@ -1205,7 +1340,7 @@ class GaiaAssistApp:
             output_file.write("Field\tValue\tUnit\n")
 
             for column_name, label in DISPLAY_COLUMNS.items():
-                value = self.result_vars[column_name].get()
+                value = format_export_value(self.current_record.get(column_name)) if self.current_record else self.result_vars[column_name].get()
                 unit = FIELD_UNITS.get(column_name, "")
                 if not value:
                     value = "-"
@@ -1213,6 +1348,13 @@ class GaiaAssistApp:
                     unit = "-"
                 output_file.write(f"{label}\t{value}\t{unit}\n")
 
+        from temperature_storage import save_records, save_csv
+        save_csv(saved_file.with_suffix(".csv"), [self.current_record or {
+            key: variable.get() for key, variable in self.result_vars.items()
+        }], DISPLAY_COLUMNS)
+        save_records(saved_file.with_suffix(".json"), [self.current_record or {
+            key: variable.get() for key, variable in self.result_vars.items()
+        }])
         return saved_file
 
     def query_gaia_source(self):
@@ -1232,6 +1374,8 @@ class GaiaAssistApp:
             )
             return
         self.reset_sky_image()
+        self.query_generation += 1
+        self.query_cancel = threading.Event()
         self.query_in_progress = True
         self.query_button.configure(state="disabled")
         self.release_selector.configure(state="disabled")
@@ -1244,31 +1388,39 @@ class GaiaAssistApp:
 
         worker = threading.Thread(
             target=self.run_query_pipeline,
-            args=(source_id, release),
+            args=(source_id, release, self.temperature_options, self.query_generation, self.query_cancel, self.force_refresh.get()),
             daemon=True,
         )
         worker.start()
 
-    def run_query_pipeline(self, source_id, release):
+    def run_query_pipeline(self, source_id, release, options=None, generation=None, cancel=None, force_refresh=False):
+        generation = self.query_generation if generation is None else generation
+        def send(event):
+            self.query_events.put(("query", generation, event))
+        def preview(data):
+            # No optional dust request before the basic data/colour estimate is visible.
+            derived = calculate_derived_data(data, options, skip_dust=True)
+            send(("preview", self.build_display_data(data, derived)))
         try:
-            source_data = fetch_gaia_source_data(source_id, release)
-            log_missing_values(source_id, source_data)
-            self.query_events.put(
-                (
-                    "status",
-                    "Gaia data loaded; querying NADC dust map and calculating...",
-                )
-            )
-            derived_data = calculate_derived_data(source_data)
-            display_data = self.build_display_data(source_data, derived_data)
-            warnings = collect_pipeline_warnings(source_data, derived_data)
+            with network.query_context(cancel=cancel, force_refresh=force_refresh, progress=lambda msg: send(("status", msg))) as context:
+                source_data = fetch_gaia_source_data(source_id, release, on_basic=preview)
+                preview(source_data)
+                log_missing_values(source_id, source_data)
+                derived_data = calculate_derived_data(source_data, options or self.temperature_options)
+                display_data = self.build_display_data(source_data, derived_data)
+                warnings = collect_pipeline_warnings(source_data, derived_data)
+                if context.cancel.is_set():
+                    raise network.QueryCancelled("Query cancelled")
+        except network.QueryCancelled:
+            send(("cancelled",))
+            return
         except Exception as error:
             LOGGER.exception(
                 "Query pipeline failed for release=%s source_id=%s",
                 release,
                 source_id,
             )
-            self.query_events.put(("error", source_id, release, error))
+            send(("error", source_id, release, error))
             return
 
         LOGGER.info(
@@ -1276,17 +1428,31 @@ class GaiaAssistApp:
             release,
             source_id,
         )
-        self.query_events.put(
-            ("success", source_id, release, display_data, warnings)
-        )
+        send(("success", source_id, release, display_data, warnings))
 
     def process_query_events(self):
         try:
             while True:
                 event = self.query_events.get_nowait()
+                if event[0] == "query":
+                    if event[1] != self.query_generation:
+                        continue
+                    event = event[2]
                 event_type = event[0]
 
-                if event_type == "status":
+                if event_type == "preview":
+                    self.current_record = dict(event[1])
+                    for key, value in event[1].items():
+                        if key in self.result_vars:
+                            display = format_display_value(key, value)
+                            self.result_vars[key].set(display)
+                            self.update_result_value(key, display)
+                    self.update_row_visibility()
+                    self.status.set("Basic results available; finishing optional data.")
+                elif event_type == "cancelled":
+                    self.finish_query()
+                    self.status.set("Query cancelled; displayed results retained.")
+                elif event_type == "status":
                     self.status.set(event[1])
                 elif event_type == "success":
                     self.handle_query_success(
@@ -1311,12 +1477,15 @@ class GaiaAssistApp:
         return display_data
 
     def handle_query_success(self, source_id, release, display_data, warnings):
+        self.current_record = dict(display_data)
         for column_name, value in display_data.items():
-            display_value = "-" if value is None else str(value)
+            if column_name not in self.result_vars:
+                continue
+            display_value = format_display_value(column_name, value)
             self.result_vars[column_name].set(display_value)
             self.update_result_value(column_name, display_value)
 
-        self.refresh_copy_table()
+        self.update_row_visibility()
         self.finish_query()
         matched_source_id = display_data["source_id"]
         if release == "DR3":
@@ -1509,7 +1678,8 @@ class GaiaAssistApp:
         else:
             service = "calculation pipeline"
 
-        self.status.set(f"{service} failed. See gaia_assist_debug.log.")
+        self.status.set("Query timed out; displayed basic results retained." if isinstance(error, network.QueryTimeout)
+                        else f"{service} failed; displayed results retained. See temperature_debug.log.")
         messagebox.showerror(
             f"{service} failed",
             f"{release} source {source_id} could not be completed.\n\n"
@@ -1570,6 +1740,9 @@ class BulkQueryWindow:
         self.query_events = queue.Queue()
         self.query_in_progress = False
         self.bulk_completed = False
+        self.cancel_event = threading.Event()
+        self.carbon_only = tk.BooleanVar(value=False)
+        self.force_refresh_snapshot = False
         self.cluster_analysis_window = None
         self.is_closed = False
 
@@ -1579,6 +1752,7 @@ class BulkQueryWindow:
         self.show_input_page()
 
     def close(self):
+        self.cancel_event.set()
         self.is_closed = True
         self.query_in_progress = False
         self.clear_window()
@@ -1962,6 +2136,11 @@ class BulkQueryWindow:
         return len(self.column_block_frames)
 
     def start_bulk_query(self):
+        if self.query_in_progress:
+            return
+        self.cancel_event = threading.Event()
+        self.force_refresh_snapshot = self.app.force_refresh.get()
+        self.temperature_options = self.app.temperature_options
         selected = self.get_selected_columns()
         if not selected:
             messagebox.showwarning(
@@ -2041,6 +2220,9 @@ class BulkQueryWindow:
             command=self.open_cluster_analysis, state="disabled",
         )
         self.cluster_analysis_button.pack(side="left")
+        ttk.Checkbutton(analysis_frame, text="Carbon-star candidates", variable=self.carbon_only,
+                        command=self.change_rows_per_page).pack(side="left", padx=8)
+        ttk.Button(analysis_frame, text="Cancel", command=self.cancel_event.set).pack(side="left")
         ttk.Label(
             analysis_frame, text="Available after a completed bulk query of at least 10 objects.",
             foreground="#555555",
@@ -2055,6 +2237,9 @@ class BulkQueryWindow:
         self.results_table = ttk.Treeview(table_frame, show="headings", height=10)
         self.results_table.grid(row=0, column=0, sticky="nsew")
         self.results_table.bind("<Double-1>", self.copy_bulk_cell)
+        self.results_table.bind("<ButtonRelease-1>", self.show_bulk_full_value)
+        self.results_table.bind("<Motion>", self.preview_bulk_value)
+        self.results_table.bind("<Leave>", lambda _e: self.app.hide_field_preview())
         self.results_table.bind("<Control-c>", self.copy_selected_bulk_row)
         self.results_table.bind("<Control-C>", self.copy_selected_bulk_row)
         self.cluster_warning_rows = {}
@@ -2126,51 +2311,63 @@ class BulkQueryWindow:
     def run_bulk_query(self, objects, release, selected_columns):
         total = len(objects)
         processed = 0
-        for batch in chunk_sequence(objects, BULK_GAIA_BATCH_SIZE):
-            batch_label = f"{batch[0]} - {batch[-1]}" if len(batch) > 1 else batch[0]
-            self.query_events.put(("batch", processed, total, batch_label))
+        options = network.settings()
+        for batch in chunk_sequence(objects, options.batch_size):
+            if self.cancel_event.is_set():
+                break
+            self.query_events.put(("batch", processed, total, batch[0]))
             try:
-                batch_data, batch_errors = fetch_gaia_source_data_batch(
-                    batch,
-                    release,
-                )
+                with network.query_context(options=options, cancel=self.cancel_event,
+                        force_refresh=self.force_refresh_snapshot,
+                        progress=lambda msg: self.query_events.put(("status", msg))):
+                    start = processed
+                    for identifier in batch:
+                        self.query_events.put(("row", {**dict.fromkeys(selected_columns, "-"), "_input_value": identifier}))
+                    def preview(data):
+                        raw = GaiaAssistApp.build_display_data(data, calculate_derived_data(data, self.temperature_options, skip_dust=True))
+                        row = {key: format_display_value(key, raw.get(key)) for key in selected_columns}
+                        row.update(_analysis_data=raw, _input_value=data["_requested_id"], _cluster_warning_reasons=cluster_analysis_warning_reasons(raw))
+                        for offset, identifier in enumerate(batch):
+                            if identifier == data["_requested_id"]:
+                                self.query_events.put(("row_update", start+offset, row))
+                    batch_data, batch_errors = fetch_gaia_source_data_batch(batch, release, on_basic=preview)
+                    # Publish basic rows before any dust enrichment.
+                    for index, object_id in enumerate(batch, start):
+                        if object_id in batch_data:
+                            data = batch_data[object_id]
+                            raw = GaiaAssistApp.build_display_data(data, calculate_derived_data(data, self.temperature_options, skip_dust=True))
+                            row = {key: format_display_value(key, raw.get(key)) for key in selected_columns}
+                            row.update(_analysis_data=raw, _input_value=object_id, _cluster_warning_reasons=cluster_analysis_warning_reasons(raw))
+                        else:
+                            row = {key: "-" for key in selected_columns}
+                            row.update(_query_failed=True, _input_value=object_id)
+                            row[selected_columns[0]] = "ERROR: " + object_id
+                        self.query_events.put(("row_update", index, row))
+                    with ThreadPoolExecutor(max_workers=BULK_CALCULATION_WORKERS) as executor:
+                        futures = {executor.submit(copy_context().run, self.build_bulk_result_row,
+                            object_id, release, selected_columns, batch_data, batch_errors): (index, object_id)
+                            for index, object_id in enumerate(batch, start)}
+                        for future in as_completed(futures):
+                            index, object_id = futures[future]
+                            row, error = future.result()
+                            row["_input_value"] = object_id
+                            if not isinstance(error, (network.QueryCancelled, network.QueryTimeout)):
+                                self.query_events.put(("row_update", index, row))
+                            processed += 1
+                            self.query_events.put(("progress", processed, total, object_id))
+            except network.QueryCancelled:
+                break
             except Exception as error:
-                LOGGER.exception(
-                    "Bulk Gaia batch failed for release=%s batch=%s",
-                    release,
-                    batch,
-                )
-                batch_data, batch_errors = self.fetch_batch_sequentially(
-                    batch,
-                    release,
-                    error,
-                )
-
-            worker_count = min(BULK_CALCULATION_WORKERS, max(len(batch), 1))
-            with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                futures = [
-                    executor.submit(
-                        self.build_bulk_result_row,
-                        object_id,
-                        release,
-                        selected_columns,
-                        batch_data,
-                        batch_errors,
-                    )
-                    for object_id in batch
-                ]
-
-                for object_id, future in zip(batch, futures):
-                    self.query_events.put(("progress", processed, total, object_id))
-                    row, error = future.result()
-                    if error is not None:
-                        self.query_events.put(("row_error", object_id, str(error)))
-
+                # The transport already retried transient errors. Do not turn one
+                # failed batch into N more remote jobs.
+                for offset, object_id in enumerate(batch):
+                    row = {key: "-" for key in selected_columns}
+                    row.update(_query_failed=True, _input_value=object_id)
+                    row[selected_columns[0]] = "ERROR: " + object_id
+                    self.query_events.put(("row_update", start+offset, row))
                     processed += 1
-                    self.query_events.put(("row", row))
-                    self.query_events.put(("progress", processed, total, object_id))
-
-        self.query_events.put(("done", total))
+                self.query_events.put(("status", str(error)))
+        self.query_events.put(("cancelled" if self.cancel_event.is_set() else "done", processed))
 
     def build_bulk_result_row(
         self,
@@ -2185,26 +2382,19 @@ class BulkQueryWindow:
                 raise batch_errors[object_id]
             source_data = batch_data[object_id]
             log_missing_values(object_id, source_data)
-            derived_data = calculate_derived_data(source_data)
+            derived_data = calculate_derived_data(source_data, getattr(self, "temperature_options", None))
             display_data = GaiaAssistApp.build_display_data(
                 source_data,
                 derived_data,
             )
             row = {
-                column_name: (
-                    "-"
-                    if display_data.get(column_name) is None
-                    else str(display_data.get(column_name))
-                )
+                column_name: format_display_value(column_name, display_data.get(column_name))
                 for column_name in selected_columns
             }
             # Metadata stays separate from the ID and exported/copied column values.
             row["_cluster_warning_reasons"] = cluster_analysis_warning_reasons(display_data)
             # Keep chart inputs even when these columns are not shown in the table.
-            row["_analysis_data"] = {
-                key: display_data.get(key)
-                for key in ("source_id", "absolute_magnitude", "new_bp_rp", "star_type")
-            }
+            row["_analysis_data"] = dict(display_data)
             return row, None
         except Exception as error:
             LOGGER.exception(
@@ -2242,7 +2432,15 @@ class BulkQueryWindow:
                 event = self.query_events.get_nowait()
                 event_type = event[0]
 
-                if event_type == "progress":
+                if event_type == "status":
+                    self.bulk_status.set(event[1])
+                elif event_type == "cancelled":
+                    self.query_in_progress = False
+                    self.bulk_status.set("Cancelled; completed and basic rows retained.")
+                elif event_type == "row_update":
+                    self.result_rows[event[1]] = event[2]
+                    self.render_results_page()
+                elif event_type == "progress":
                     completed, total, object_id = event[1], event[2], event[3]
                     self.progress["value"] = completed
                     self.bulk_status.set(
@@ -2296,7 +2494,7 @@ class BulkQueryWindow:
             return
         try:
             # Plotting is loaded only after the user explicitly requests analysis.
-            from cluster_analysis_window import ClusterAnalysisWindow
+            from temperature_cluster_window import ClusterAnalysisWindow
         except ImportError as error:
             LOGGER.exception("Cluster plotting could not be loaded")
             messagebox.showerror(
@@ -2308,7 +2506,12 @@ class BulkQueryWindow:
             return
         self.cluster_analysis_window = ClusterAnalysisWindow(self.window, self.result_rows)
 
+    def visible_result_rows(self):
+        from temperature_carbon import is_carbon
+        return [row for row in self.result_rows if not self.carbon_only.get() or is_carbon(row)]
+
     def render_results_page(self):
+        visible_rows = self.visible_result_rows()
         selected_columns = self.get_selected_columns()
         self.results_table["columns"] = selected_columns
         for column_name in selected_columns:
@@ -2330,18 +2533,20 @@ class BulkQueryWindow:
         rows_per_page = self.rows_per_page.get()
         total_pages = max(
             1,
-            (len(self.result_rows) + rows_per_page - 1) // rows_per_page,
+            (len(self.visible_result_rows()) + rows_per_page - 1) // rows_per_page,
         )
         self.current_page = min(self.current_page, total_pages - 1)
         start = self.current_page * rows_per_page
         end = start + rows_per_page
         self.cluster_warning_rows = {}
-        for row in self.result_rows[start:end]:
+        self.full_bulk_rows = {}
+        for row in visible_rows[start:end]:
             item = self.results_table.insert(
                 "",
                 "end",
-                values=[row.get(column_name, "-") for column_name in selected_columns],
+                values=[compact_text(row.get(column_name, "-"), 58) for column_name in selected_columns],
             )
+            self.full_bulk_rows[item] = row
             if "source_id" in selected_columns and row.get("_cluster_warning_reasons"):
                 self.cluster_warning_rows[item] = row
 
@@ -2433,11 +2638,42 @@ class BulkQueryWindow:
         rows_per_page = self.rows_per_page.get()
         total_pages = max(
             1,
-            (len(self.result_rows) + rows_per_page - 1) // rows_per_page,
+            (len(self.visible_result_rows()) + rows_per_page - 1) // rows_per_page,
         )
         if self.current_page < total_pages - 1:
             self.current_page += 1
             self.render_results_page()
+
+    def show_bulk_full_value(self, event):
+        if self.app.field_name_mode.get() != "Explain":
+            return
+        row_id = self.results_table.identify_row(event.y)
+        col = self.results_table.identify_column(event.x)
+        columns = self.get_selected_columns()
+        if not row_id or not col:
+            return
+        index = int(col[1:])-1
+        if 0 <= index < len(columns):
+            value = str(self.full_bulk_rows.get(row_id, {}).get(columns[index], "-"))
+            if compact_text(value, 58) != value:
+                self.app.show_full_value(value)
+
+    def preview_bulk_value(self, event):
+        if self.app.field_name_mode.get() != "Copy":
+            return
+        row_id = self.results_table.identify_row(event.y)
+        col = self.results_table.identify_column(event.x)
+        columns = self.get_selected_columns()
+        if not row_id or not col:
+            self.app.hide_field_preview()
+            return
+        index = int(col[1:])-1
+        if 0 <= index < len(columns):
+            value = str(self.full_bulk_rows.get(row_id, {}).get(columns[index], "-"))
+            if compact_text(value, 58) != value:
+                self.app.show_value_preview(event, value)
+            else:
+                self.app.hide_field_preview()
 
     def copy_bulk_cell(self, event):
         row_id = self.results_table.identify_row(event.y)
@@ -2450,7 +2686,8 @@ class BulkQueryWindow:
         if column_index < 0 or column_index >= len(values):
             return
 
-        value = values[column_index]
+        key = self.get_selected_columns()[column_index]
+        value = str(self.full_bulk_rows.get(row_id, {}).get(key, values[column_index]))
         self.window.clipboard_clear()
         self.window.clipboard_append(value)
         self.bulk_status.set(f"Copied: {value}")
@@ -2463,7 +2700,7 @@ class BulkQueryWindow:
         selected_columns = self.get_selected_columns()
         copied_rows = []
         for item in selected_items:
-            values = self.results_table.item(item, "values")
+            values = [str(self.full_bulk_rows[item].get(key, "-")) for key in selected_columns]
             copied_rows.append(
                 "\t".join(
                     str(values[index])
@@ -2534,7 +2771,8 @@ class BulkQueryWindow:
         saved_file = SAVED_OBJECTS_DIR / (
             f"gaia_bulk_{timestamp:%Y%m%d_%H%M%S_%f}.txt"
         )
-        selected_columns = self.get_selected_columns()
+        from temperature_storage import REQUIRED_EXPORT_FIELDS, save_csv
+        selected_columns = list(dict.fromkeys([*self.get_selected_columns(), *REQUIRED_EXPORT_FIELDS]))
 
         with saved_file.open("w", encoding="utf-8") as output_file:
             output_file.write("Gaia Assist Bulk Query Data\n")
@@ -2562,9 +2800,12 @@ class BulkQueryWindow:
                     else "-"
                 )
                 values = [input_value]
-                values.extend(row.get(column_name, "-") for column_name in selected_columns)
+                values.extend(format_export_value(row.get("_analysis_data", row).get(column_name)) for column_name in selected_columns)
                 output_file.write("\t".join(values) + "\n")
 
+        from temperature_storage import save_records
+        save_records(saved_file.with_suffix(".json"), self.result_rows)
+        save_csv(saved_file.with_suffix(".csv"), self.result_rows, DISPLAY_COLUMNS)
         return saved_file
 
     def show_guide(self):
@@ -2577,24 +2818,9 @@ class BulkQueryWindow:
 
 
 def fetch_sesame_response(common_name):
-    encoded_name = requests.utils.quote(common_name.strip(), safe="")
-    errors = []
-
-    for url_template in SESAME_URLS:
-        url = url_template.format(name=encoded_name)
-        try:
-            response = requests.get(
-                url,
-                headers={"User-Agent": "GaiaAssist/1.0"},
-                timeout=20,
-            )
-            response.raise_for_status()
-            if response.text.strip():
-                return response.text
-        except requests.RequestException as error:
-            errors.append(f"{url}: {error}")
-
-    raise requests.ConnectionError("; ".join(errors))
+    with network.timed("name resolution"):
+        return network.bounded("aux", ("scientist_aux", "sesame", (common_name,)),
+            limit=network.settings().optional_timeout)
 
 
 def parse_sesame_response(response_text):
@@ -2659,8 +2885,7 @@ def resolve_nearest_dr3_source_id(ra, dec):
     """
 
     def launch_position_query():
-        job = Gaia.launch_job_async(query, dump_to_file=False)
-        return job.get_results()
+        return network.tap_query(query)
 
     service = "ESA Gaia common-name position match"
     results = run_with_retries(launch_position_query, service, attempts=2)
@@ -2737,8 +2962,7 @@ def resolve_dr3_source_id(source_id, release):
         raise ValueError(f"Unsupported Gaia release: {release}")
 
     def launch_crossmatch_query():
-        job = Gaia.launch_job_async(query, dump_to_file=False)
-        return job.get_results()
+        return network.tap_query(query)
 
     service = f"ESA Gaia {release}-to-DR3 crossmatch"
     results = run_with_retries(launch_crossmatch_query, service, attempts=2)
@@ -2775,192 +2999,81 @@ def default_astrophysical_row():
         "classprob_dsc_combmod_galaxy": None,
         "classprob_dsc_combmod_star": None,
         "mh_gspphot": None,
+        **dict.fromkeys(AP_FIELDS),
     }
 
 
-def fetch_gaia_source_data_batch(source_ids, release="DR3"):
-    resolved_pairs = []
-    errors = {}
-    for source_id in source_ids:
+def astrophysical_query_status(has_row, error=None):
+    if error is not None:
+        return {"gaia_ap_status": "query_failed", "gaia_ap_message": "Gaia parameter request failed; retry the query. " + error}
+    if not has_row:
+        return {"gaia_ap_status": "no_row", "gaia_ap_message": "Query succeeded; no astrophysical-parameter row for this Gaia source."}
+    return {"gaia_ap_status": "retrieved", "gaia_ap_message": "Query succeeded; blank catalogue fields were returned as missing values."}
+
+
+def fetch_gaia_source_data_batch(source_ids, release="DR3", on_basic=None):
+    import scientist_catalogue
+    if network.CURRENT.get() is None:
+        with network.query_context():
+            return fetch_gaia_source_data_batch(source_ids, release, on_basic)
+    pairs, errors = [], {}
+    for identifier in dict.fromkeys(source_ids):
         try:
-            dr3_source_id = resolve_dr3_source_id(source_id, release)
-            resolved_pairs.append((source_id, str(dr3_source_id)))
+            with network.timed("name / release resolution"):
+                resolved = network.cached("resolution", [release, identifier],
+                    lambda: resolve_dr3_source_id(identifier, release))
+            pairs.append((identifier, str(resolved)))
+        except network.QueryCancelled:
+            raise
         except Exception as error:
-            errors[source_id] = error
-
-    if not resolved_pairs:
+            errors[identifier] = error
+    if not pairs:
         return {}, errors
-
-    dr3_source_ids = sorted({dr3_source_id for _source_id, dr3_source_id in resolved_pairs})
-    id_list = ", ".join(dr3_source_ids)
-    source_query = f"""
-        SELECT
-            source_id,
-            ra,
-            dec,
-            l,
-            b,
-            pmra,
-            pmdec,
-            ra_error,
-            dec_error,
-            parallax,
-            parallax_over_error,
-            astrometric_excess_noise,
-            astrometric_excess_noise_sig,
-            ruwe,
-            phot_bp_rp_excess_factor,
-            radial_velocity,
-            radial_velocity_error,
-            phot_g_mean_mag,
-            bp_rp
-        FROM gaiadr3.gaia_source
-        WHERE source_id IN ({id_list})
-    """
-    astrophysical_query = f"""
-        SELECT
-            source_id,
-            classprob_dsc_combmod_quasar,
-            classprob_dsc_combmod_galaxy,
-            classprob_dsc_combmod_star,
-            mh_gspphot
-        FROM gaiadr3.astrophysical_parameters
-        WHERE source_id IN ({id_list})
-    """
-
-    def launch_source_query():
-        job = Gaia.launch_job_async(source_query, dump_to_file=False)
-        return job.get_results()
-
-    source_results = run_with_retries(
-        launch_source_query,
-        "ESA Gaia source table batch",
-        attempts=2,
-    )
-    source_rows = {
-        str(_clean_value(row["source_id"])): row
-        for row in source_results
-        if _clean_value(row["source_id"]) is not None
-    }
-
-    def launch_astrophysical_query():
-        job = Gaia.launch_job_async(astrophysical_query, dump_to_file=False)
-        return job.get_results()
-
-    try:
-        astrophysical_results = run_with_retries(
-            launch_astrophysical_query,
-            "ESA Gaia astrophysical parameters batch",
-            attempts=2,
-        )
-        astrophysical_rows = {
-            str(_clean_value(row["source_id"])): row
-            for row in astrophysical_results
-            if _clean_value(row["source_id"]) is not None
-        }
-    except QueryServiceError as error:
-        LOGGER.error("Gaia astrophysical parameters batch unavailable: %s", error)
-        astrophysical_rows = {}
-
-    batch_data = {}
-    for original_source_id, dr3_source_id in resolved_pairs:
-        source_row = source_rows.get(dr3_source_id)
-        if source_row is None:
-            errors[original_source_id] = QueryServiceError(
-                "ESA Gaia source table batch",
-                f"No Gaia DR3 source found for source_id {dr3_source_id}.",
-            )
-            continue
-
-        astrophysical_row = astrophysical_rows.get(
-            dr3_source_id,
-            default_astrophysical_row(),
-        )
-        batch_data[original_source_id] = build_source_data_from_gaia_rows(
-            source_row,
-            astrophysical_row,
-        )
-
-    return batch_data, errors
+    def preview(record):
+        if on_basic:
+            for original, resolved in pairs:
+                if resolved == record["source_id"]:
+                    on_basic({**record, "_requested_id": original})
+    records, failures = scientist_catalogue.fetch([r for _, r in pairs], release, preview if on_basic else None)
+    # Publish the baseline before bounded optional distance enrichment, even
+    # when Gaia source and AP data were both satisfied from cache.
+    import scientist_distance
+    context = network.CURRENT.get()
+    for record in records.values():
+        if context and context.cancel.is_set():
+            raise network.QueryCancelled("Query cancelled")
+        preview(record)
+    distance_records = scientist_distance.fetch(records.keys())
+    if context and context.cancel.is_set():
+        raise network.QueryCancelled("Query cancelled")
+    for identifier, record in records.items():
+        record.update(distance_records[identifier])
+    results = {}
+    for original, resolved in pairs:
+        if resolved in records:
+            results[original] = records[resolved]
+        else:
+            errors[original] = failures[resolved]
+    return results, errors
 
 
-def fetch_gaia_source_data(source_id, release="DR3"):
-    dr3_source_id = resolve_dr3_source_id(source_id, release)
-    source_query = f"""
-        SELECT
-            source_id,
-            ra,
-            dec,
-            l,
-            b,
-            pmra,
-            pmdec,
-            ra_error,
-            dec_error,
-            parallax,
-            parallax_over_error,
-            astrometric_excess_noise,
-            astrometric_excess_noise_sig,
-            ruwe,
-            phot_bp_rp_excess_factor,
-            radial_velocity,
-            radial_velocity_error,
-            phot_g_mean_mag,
-            bp_rp
-        FROM gaiadr3.gaia_source
-        WHERE source_id = {dr3_source_id}
-    """
-    astrophysical_query = f"""
-        SELECT
-            classprob_dsc_combmod_quasar,
-            classprob_dsc_combmod_galaxy,
-            classprob_dsc_combmod_star,
-            mh_gspphot
-        FROM gaiadr3.astrophysical_parameters
-        WHERE source_id = {dr3_source_id}
-    """
-
-    def launch_source_query():
-        job = Gaia.launch_job_async(source_query, dump_to_file=False)
-        return job.get_results()
-
-    source_results = run_with_retries(
-        launch_source_query,
-        "ESA Gaia source table",
-        attempts=2,
-    )
-
-    if len(source_results) == 0:
-        raise QueryServiceError(
-            "ESA Gaia source table",
-            f"No Gaia DR3 source found for source_id {dr3_source_id}.",
-        )
-
-    def launch_astrophysical_query():
-        job = Gaia.launch_job_async(astrophysical_query, dump_to_file=False)
-        return job.get_results()
-
-    try:
-        astrophysical_results = run_with_retries(
-            launch_astrophysical_query,
-            "ESA Gaia astrophysical parameters",
-            attempts=2,
-        )
-    except QueryServiceError as error:
-        LOGGER.error("Gaia astrophysical parameters unavailable: %s", error)
-        astrophysical_results = []
-
-    row = source_results[0]
-    if len(astrophysical_results) == 0:
-        astrophysical_row = default_astrophysical_row()
-    else:
-        astrophysical_row = astrophysical_results[0]
-
-    return build_source_data_from_gaia_rows(row, astrophysical_row)
+def fetch_gaia_source_data(source_id, release="DR3", on_basic=None):
+    records, errors = fetch_gaia_source_data_batch([source_id], release, on_basic)
+    if source_id in errors:
+        raise errors[source_id]
+    return records[source_id]
 
 
 def build_source_data_from_gaia_rows(row, astrophysical_row):
+    def optional(record, key):
+        try:
+            return _clean_value(record[key])
+        except (KeyError, IndexError):
+            return None
     queried_source_id = _clean_value(row["source_id"])
+    if isinstance(queried_source_id, float):
+        raise ValueError("Gaia source_id must be an integer or exact digit string, never float")
+    queried_source_id = None if queried_source_id is None else str(queried_source_id)
     object_type = format_object_type_probability(astrophysical_row)
     metallicity = _clean_value(astrophysical_row["mh_gspphot"])
     equatorial_coordinate_ra = _clean_value(row["ra"])
@@ -3004,6 +3117,8 @@ def build_source_data_from_gaia_rows(row, astrophysical_row):
         "radial_velocity_error": radial_velocity_error,
         "phot_g_mean_mag": mean_g,
         "bp_rp": mean_bp_rp,
+        **{key: optional(row, key) for key in PHOTOMETRY_FIELDS},
+        **{key: optional(astrophysical_row, key) for key in AP_FIELDS},
     }
 
 
@@ -3050,16 +3165,18 @@ def log_missing_values(source_id, source_data):
 
 def collect_pipeline_warnings(source_data, derived_data):
     warnings = []
-    parallax = source_data.get("parallax")
+    adopted_distance = number(derived_data.get("adopted_distance_pc"))
     dust_query_expected = (
-        parallax is not None
-        and parallax > 0
+        adopted_distance is not None
+        and adopted_distance > 0
         and source_data.get("l") is not None
         and source_data.get("b") is not None
     )
 
-    if dust_query_expected and derived_data.get("ebv") is None:
-        warnings.append("NADC dust data unavailable")
+    if dust_query_expected and derived_data.get("extinction_source") == "unavailable":
+        warnings.append("Extinction unavailable")
+    if derived_data.get("temperature_status") in ("needs_review", "unavailable"):
+        warnings.append("Temperature " + derived_data["temperature_status"])
 
     return warnings
 
@@ -3091,8 +3208,11 @@ def calculate_first_step(source_data):
     }
 
 
-def calculate_derived_data(source_data):
-    derived_data = {
+def calculate_derived_data(source_data, options=None, *, skip_dust=False):
+    options = options or TemperatureOptions()
+    # Old saved records and sources lacking AP data remain usable.
+    source_data = {**dict.fromkeys(GAIA_COLUMNS), **source_data}
+    derived_data = {**dict.fromkeys(DERIVED_COLUMNS),
         **calculate_first_step(source_data),
         **calculate_error_check(source_data),
         **calculate_ruwe_check(source_data),
@@ -3101,18 +3221,36 @@ def calculate_derived_data(source_data):
     parallax_check = calculate_parallax_check(source_data)
     derived_data.update(parallax_check)
 
-    if parallax_check["parallax_data_status"] == "insufficient or unreliable data":
-        return derived_data
-
-    distance_data = calculate_distance(source_data)
+    distance_result = evaluate_distance(source_data, options)
+    derived_data.update(distance_result)
+    # Compatibility aliases are written only on explicit new calculations.
+    # Every downstream calculation reads the explicit adopted distance.
+    distance_data = {"adopted_distance_pc": distance_result["adopted_distance_pc"],
+                     "distance_parsecs": distance_result["adopted_distance_pc"],
+                     "distance_lightyears": distance_result["adopted_distance_ly"]}
     derived_data.update(distance_data)
-    dust_data = calculate_dust_extinction(source_data, distance_data)
+    # Choose one reddening solution. Never silently substitute zero or correct twice.
+    reddening = number(source_data.get("ebpminrp_gspphot"))
+    ag = number(source_data.get("ag_gspphot"))
+    e_errors = None
+    if options.zero_reddening:
+        dust_data = {"ebv": None, "mean_g_band_extinction": 0., "bp_rp_reddening": 0.,
+                     "extinction_source": "Explicit zero-reddening assumption", "extinction_status": "provisional"}
+    elif reddening is not None and reddening >= 0:
+        e_errors = bounds(reddening, source_data.get("ebpminrp_gspphot_lower"), source_data.get("ebpminrp_gspphot_upper"))
+        ag_errors = bounds(ag, source_data.get("ag_gspphot_lower"), source_data.get("ag_gspphot_upper"))
+        valid_e = e_errors is not None and source_data["ebpminrp_gspphot_lower"] >= 0
+        dust_data = {"ebv": None, "mean_g_band_extinction": ag if ag is not None and ag >= 0 else None,
+                     "bp_rp_reddening": reddening, "extinction_source": "Gaia GSP-Phot",
+                     "extinction_status": "usable" if valid_e else "uncertain bounds"}
+    else:
+        dust_data = ({"ebv": None, "mean_g_band_extinction": None, "bp_rp_reddening": None}
+                     if skip_dust else calculate_dust_extinction(source_data, distance_data))
+        dust_data.update(extinction_source="NADC dust map (fixed coefficients)" if dust_data["ebv"] is not None else "unavailable",
+                         extinction_status="uncertain (map errors unavailable)" if dust_data["ebv"] is not None else "unavailable")
     derived_data.update(dust_data)
     new_bp_rp_data = calculate_new_bp_rp(source_data, dust_data)
     derived_data.update(new_bp_rp_data)
-    derived_data.update(
-        calculate_bp_rp_excess_check(source_data, new_bp_rp_data)
-    )
     absolute_magnitude_data = calculate_absolute_magnitude(
         source_data, distance_data, dust_data
     )
@@ -3122,15 +3260,29 @@ def calculate_derived_data(source_data):
         absolute_magnitude_data,
     )
     derived_data.update(visual_absolute_magnitude_data)
-    temperature_data = calculate_effective_temperature(
-        source_data,
-        new_bp_rp_data,
-        visual_absolute_magnitude_data,
-    )
+    c = number(new_bp_rp_data["new_bp_rp"])
+    # ESA DR3 Table 5.9 gives estimated V. A conservative application subset
+    # avoids treating far-red transformations as strong population evidence.
+    v_usable = c is not None and .2 <= c <= 2.5
+    derived_data["visual_magnitude_status"] = "estimated Johnson V; ESA DR3 Table 5.9 (~0.030 mag fit scatter)" if v_usable else "uncertain V transformation outside conservative 0.2–2.5 colour interval"
+    bp_err = magnitude_error(source_data.get("phot_bp_mean_flux_over_error"))
+    rp_err = magnitude_error(source_data.get("phot_rp_mean_flux_over_error"))
+    colour_errors = None
+    if bp_err is not None and rp_err is not None and e_errors is not None:
+        # C = observed colour - E: reddening's upper error gives C's lower error.
+        colour_errors = tuple(sqrt(bp_err**2 + rp_err**2 + error**2) for error in reversed(e_errors))
+    cmd_reliable = bool(distance_result["_distance_cmd_usable"] and v_usable and dust_data["extinction_status"] == "usable"
+                        and ag is not None and ag >= 0 and bounds(ag, source_data.get("ag_gspphot_lower"), source_data.get("ag_gspphot_upper")))
+    with network.timed("temperature calculation"):
+        temperature_data = evaluate_temperatures(source_data, {
+            **derived_data, "colour_errors": colour_errors, "cmd_reliable": cmd_reliable,
+        }, options)
     derived_data.update(temperature_data)
     luminosity_data = calculate_luminosity(absolute_magnitude_data)
     derived_data.update(luminosity_data)
-    derived_data.update(calculate_radius(luminosity_data, temperature_data))
+    from temperature_comparison import calculate_local_comparisons
+    import sys
+    derived_data.update(calculate_local_comparisons(source_data, derived_data, sys.modules[__name__]))
     derived_data.update(calculate_peak_wavelength(temperature_data))
     derived_data.update(
         calculate_star_type(
@@ -3139,6 +3291,14 @@ def calculate_derived_data(source_data):
             visual_absolute_magnitude_data,
         )
     )
+    if derived_data["star_type"] is None or derived_data["star_type"] == "N/A":
+        derived_data["classification_status"] = "unclassified"
+    elif temperature_data["bp_rp_temperature_approximate"] and temperature_data["adopted_temperature_source"] == "BP-RP":
+        derived_data["classification_status"] = "approximate; tentative, not a secure subtype census"
+    elif temperature_data["temperature_status"] in ("needs_review", "conditional") or not cmd_reliable:
+        derived_data["classification_status"] = "tentative; needs_review"
+    else:
+        derived_data["classification_status"] = "estimated (not spectroscopic)"
     derived_data.update(
         calculate_visual_apparent_magnitude(
             source_data,
@@ -3148,6 +3308,10 @@ def calculate_derived_data(source_data):
     )
     derived_data.update(calculate_excess_noise_check(source_data))
 
+    from temperature_carbon import annotate_classification
+    annotate_classification(source_data, derived_data)
+    derived_data.update(baseline_diagnostics(source_data, derived_data))
+    derived_data.pop("_distance_cmd_usable", None)
     return derived_data
 
 
@@ -3492,7 +3656,7 @@ def classify_parallax_over_error(parallax_over_error):
 def calculate_distance(source_data):
     parallax = source_data["parallax"]
 
-    if parallax is None or parallax == 0:
+    if number(parallax) is None or parallax <= 0:
         return {
             "distance_parsecs": None,
             "distance_lightyears": None,
@@ -3510,7 +3674,7 @@ def calculate_distance(source_data):
 def calculate_dust_extinction(source_data, distance_data):
     galactic_l = source_data["l"]
     galactic_b = source_data["b"]
-    distance_parsecs = distance_data["distance_parsecs"]
+    distance_parsecs = distance_data.get("adopted_distance_pc", distance_data.get("distance_parsecs"))
 
     if (
         galactic_l is None
@@ -3528,7 +3692,9 @@ def calculate_dust_extinction(source_data, distance_data):
 
     try:
         ebv = fetch_dust_ebv(galactic_l, galactic_b, distance_kpc)
-    except QueryServiceError as error:
+    except network.QueryCancelled:
+        raise
+    except (QueryServiceError, network.NetworkFailure) as error:
         LOGGER.error("Dust data unavailable: %s", error)
         ebv = None
 
@@ -3550,62 +3716,18 @@ def calculate_dust_extinction(source_data, distance_data):
 
 
 def fetch_dust_ebv(galactic_l, galactic_b, distance_kpc):
-    return run_with_retries(
-        lambda: fetch_dust_ebv_once(
-            galactic_l,
-            galactic_b,
-            distance_kpc,
-        ),
-        "NADC dust calculator",
-        attempts=2,
-    )
-
-
-def fetch_dust_ebv_once(galactic_l, galactic_b, distance_kpc):
-    with requests.Session() as session:
-        page_response = session.get(DUST_CALCULATOR_URL, timeout=20)
-        page_response.raise_for_status()
-
-        token_match = re.search(
-            r'var\s+csrf_token\s*=\s*"([^"]+)"',
-            page_response.text,
-        )
-        if token_match is None:
-            raise ValueError("The dust calculator CSRF token was not found.")
-
-        csrf_token = token_match.group(1)
-        form_data = {
-            "coord_system": "galactic",
-            "coord1": str(galactic_l),
-            "coord2": str(galactic_b),
-            "d": str(distance_kpc),
-            "csrf_token": csrf_token,
-        }
-        result_response = session.post(
-            DUST_CALCULATOR_URL,
-            data=form_data,
-            headers={
-                "Referer": DUST_CALCULATOR_URL,
-                "X-CSRFToken": csrf_token,
-            },
-            timeout=40,
-        )
-        result_response.raise_for_status()
-
-    ebv_match = re.search(
-        r'E\(B-V\).*?<kbd>\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*mag\s*</kbd>',
-        result_response.text,
-        re.IGNORECASE | re.DOTALL,
-    )
-    if ebv_match is None:
-        raise ValueError("E(B-V) was not found in the dust calculator response.")
-
-    return float(ebv_match.group(1))
+    context = network.CURRENT.get()
+    if context:
+        context.report("Looking up dust reddening")
+    with network.timed("dust lookup"):
+        return network.cached("dust", [DUST_CALCULATOR_URL, "galactic", galactic_l, galactic_b, distance_kpc],
+            lambda: network.bounded("aux", ("scientist_aux", "dust", (galactic_l, galactic_b, distance_kpc)),
+                limit=(context.options if context else network.settings()).optional_timeout), cache_none=False)
 
 
 def calculate_absolute_magnitude(source_data, distance_data, dust_data):
     mean_g = source_data["phot_g_mean_mag"]
-    distance_parsecs = distance_data["distance_parsecs"]
+    distance_parsecs = distance_data.get("adopted_distance_pc", distance_data.get("distance_parsecs"))
     mean_g_band_extinction = dust_data["mean_g_band_extinction"]
 
     if (
@@ -3636,6 +3758,11 @@ def calculate_luminosity(absolute_magnitude_data):
 
 
 def calculate_radius(luminosity_data, temperature_data):
+    """A G-band ratio cannot supply a bolometric radius."""
+    return {"radius": None}
+
+
+def calculate_legacy_radius(luminosity_data, temperature_data):
     luminosity_solar = luminosity_data["luminosity"]
     effective_temperature = temperature_data["effective_temperature"]
 
@@ -3685,7 +3812,7 @@ def calculate_new_bp_rp(source_data, dust_data):
     return {"new_bp_rp": round(new_bp_rp, 6)}
 
 
-def calculate_effective_temperature(
+def calculate_legacy_effective_temperature(
     source_data,
     new_bp_rp_data,
     visual_magnitude_data,
@@ -3761,15 +3888,15 @@ def calculate_visual_absolute_magnitude(
     bp_rp = new_bp_rp_data["new_bp_rp"]
     absolute_magnitude = absolute_magnitude_data["absolute_magnitude"]
 
-    if bp_rp is None or absolute_magnitude is None:
+    if bp_rp is None or not -.5 < bp_rp < 5 or absolute_magnitude is None:
         return {"visual_absolute_magnitude": None}
 
     visual_absolute_magnitude = (
         absolute_magnitude
         + 0.02704
-        + 0.01424 * bp_rp
-        + 0.1607 * (bp_rp ** 2)
-        - 0.01235 * (bp_rp ** 3)
+        - 0.01424 * bp_rp
+        + 0.2156 * (bp_rp ** 2)
+        - 0.01426 * (bp_rp ** 3)
     )
     return {
         "visual_absolute_magnitude": round(visual_absolute_magnitude, 6)
@@ -3785,16 +3912,16 @@ def calculate_visual_apparent_magnitude(
     bp_rp = new_bp_rp_data["new_bp_rp"]
     mean_g_band_extinction = dust_data["mean_g_band_extinction"]
 
-    if mean_g is None or bp_rp is None or mean_g_band_extinction is None:
+    if mean_g is None or bp_rp is None or not -.5 < bp_rp < 5 or mean_g_band_extinction is None:
         return {"visual_apparent_magnitude": None}
 
     corrected_mean_g = mean_g - mean_g_band_extinction
     visual_apparent_magnitude = (
         corrected_mean_g
         + 0.02704
-        + 0.01424 * bp_rp
-        + 0.1607 * (bp_rp ** 2)
-        - 0.01235 * (bp_rp ** 3)
+        - 0.01424 * bp_rp
+        + 0.2156 * (bp_rp ** 2)
+        - 0.01426 * (bp_rp ** 3)
     )
     return {
         "visual_apparent_magnitude": round(visual_apparent_magnitude, 6)
@@ -3873,35 +4000,18 @@ def _clean_value(value):
         pass
 
     try:
-        return value.item()
+        value = value.item()
     except AttributeError:
-        return value
+        pass
+    if isinstance(value, float) and not isfinite(value):
+        return None
+    return value
 
 
 def main():
-    from app_launcher import choose_startup_mode
-    import importlib
-
     load_desktop_gui()
     root = tk.Tk()
-    while True:
-        mode = choose_startup_mode(root)
-        if mode is None:
-            root.destroy()
-            return
-        if mode == "Explorer":
-            application_type = GaiaAssistApp
-            break
-        try:
-            scientist = importlib.import_module("Main_temperature")
-            scientist.load_desktop_gui()
-            application_type = scientist.GaiaAssistApp
-            break
-        except Exception as error:
-            LOGGER.exception("Scientist mode could not be loaded")
-            messagebox.showerror("Scientist could not be opened", str(error), parent=root)
-    application_type(root)
-    root.title(f"Gaia Assist — {mode}")
+    GaiaAssistApp(root)
     root.mainloop()
 
 

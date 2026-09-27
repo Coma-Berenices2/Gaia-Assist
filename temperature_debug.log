@@ -1,0 +1,270 @@
+2026-09-27 16:10:07,767 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:07,779 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:07,780 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:07,781 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,539 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,540 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,548 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,548 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,549 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,549 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,554 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,554 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,555 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,555 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,556 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,556 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,556 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,557 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,557 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,572 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,573 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,574 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:13,574 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,248 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,248 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,258 | INFO | Timing name / release resolution: 0.011 s
+2026-09-27 16:10:14,259 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,259 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,260 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,260 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,271 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,272 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,272 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,273 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,273 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,285 | INFO | Timing cache lookup: 0.001 s; hit
+2026-09-27 16:10:14,286 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,286 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,287 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,287 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,296 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,296 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,297 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,297 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,298 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,298 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,298 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,316 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,317 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,317 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,326 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,326 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,327 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,327 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,328 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,328 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,332 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,332 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,341 | INFO | Timing name / release resolution: 0.008 s
+2026-09-27 16:10:14,341 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,341 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,342 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,342 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:14,353 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:14,357 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,358 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,358 | INFO | Timing name / release resolution: 0.000 s
+2026-09-27 16:10:14,359 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,359 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,359 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,360 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,361 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,361 | INFO | Timing name / release resolution: 0.000 s
+2026-09-27 16:10:14,361 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,361 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,362 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,362 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:14,362 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,363 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,364 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,364 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,995 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,995 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,996 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,997 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,997 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,998 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,998 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:14,999 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,010 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,010 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,023 | INFO | Timing name / release resolution: 0.014 s
+2026-09-27 16:10:15,024 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,024 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,024 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,025 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,037 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:15,042 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,042 | INFO | Timing name / release resolution: 0.001 s
+2026-09-27 16:10:15,042 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,042 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,043 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,044 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,045 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,045 | ERROR | Bulk query failed for release=DR3 object=9
+Traceback (most recent call last):
+  File "D:\Astronomy Projects\Gaia Assist\Gaia-Assist-main\dist\github-update\Main_temperature.py", line 2382, in build_bulk_result_row
+    raise batch_errors[object_id]
+scientist_network.NetworkFailure: no matching source
+2026-09-27 16:10:15,047 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,047 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,048 | ERROR | Web bulk query failed for release=DR3 object=9
+Traceback (most recent call last):
+  File "D:\Astronomy Projects\Gaia Assist\Gaia-Assist-main\dist\github-update\WebMain_temperature.py", line 103, in build_bulk_result_row
+    raise batch_errors[object_id]
+  File "D:\Astronomy Projects\Gaia Assist\Gaia-Assist-main\dist\github-update\Main_temperature.py", line 2382, in build_bulk_result_row
+    raise batch_errors[object_id]
+scientist_network.NetworkFailure: no matching source
+2026-09-27 16:10:15,050 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,050 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,058 | INFO | Timing name / release resolution: 0.009 s
+2026-09-27 16:10:15,059 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,059 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,062 | INFO | Timing name / release resolution: 0.004 s
+2026-09-27 16:10:15,063 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,063 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,063 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,064 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,064 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,064 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,084 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:15,098 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,098 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,098 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,098 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,099 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,100 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,100 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,100 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,100 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,101 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,101 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,101 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,206 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,206 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,207 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,207 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,215 | INFO | Timing name / release resolution: 0.008 s
+2026-09-27 16:10:15,215 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,216 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,216 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,216 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,229 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,233 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,234 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,234 | INFO | Timing name / release resolution: 0.000 s
+2026-09-27 16:10:15,235 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,235 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,236 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,236 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,237 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,237 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,241 | INFO | Timing name / release resolution: 0.004 s
+2026-09-27 16:10:15,241 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,241 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,241 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,241 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,252 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,257 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:15,287 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,287 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,341 | INFO | Timing name / release resolution: 0.055 s
+2026-09-27 16:10:15,342 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,342 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,343 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,343 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,353 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:15,358 | INFO | Timing cache lookup: 0.001 s; hit
+2026-09-27 16:10:15,358 | INFO | Timing name / release resolution: 0.001 s
+2026-09-27 16:10:15,359 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,359 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:15,360 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:16,161 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:16,161 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:16,205 | INFO | Timing name / release resolution: 0.044 s
+2026-09-27 16:10:16,206 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:16,207 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:16,207 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:16,207 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:16,211 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:16,215 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:16,215 | INFO | Timing name / release resolution: 0.000 s
+2026-09-27 16:10:16,216 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:16,216 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:16,216 | INFO | Timing cache lookup: 0.000 s; hit
+2026-09-27 16:10:16,220 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:16,220 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:16,404 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:16,830 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:17,932 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,455 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,456 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,456 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,457 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,457 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,458 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,459 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,459 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,465 | INFO | Timing temperature calculation: 0.005 s
+2026-09-27 16:10:19,465 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,466 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,466 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,467 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,467 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,468 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,468 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,468 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,469 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,469 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,806 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,808 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,808 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,831 | INFO | Timing name / release resolution: 0.023 s
+2026-09-27 16:10:19,831 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,831 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,832 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,832 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,844 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,848 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,848 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,856 | INFO | Timing name / release resolution: 0.008 s
+2026-09-27 16:10:19,856 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,857 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,857 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,857 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,868 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,873 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,873 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,882 | INFO | Timing name / release resolution: 0.009 s
+2026-09-27 16:10:19,882 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,883 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,883 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:19,883 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,895 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,899 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,899 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,908 | INFO | Timing name / release resolution: 0.009 s
+2026-09-27 16:10:19,908 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,909 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:19,910 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,910 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,922 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:19,927 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,928 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,935 | INFO | Timing name / release resolution: 0.008 s
+2026-09-27 16:10:19,936 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,936 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,936 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,937 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,941 | INFO | Timing cache lookup: 0.001 s; miss/refresh
+2026-09-27 16:10:19,945 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,946 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,954 | INFO | Timing name / release resolution: 0.008 s
+2026-09-27 16:10:19,954 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,954 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,955 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,955 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,960 | INFO | Timing cache lookup: 0.000 s; miss/refresh
+2026-09-27 16:10:19,964 | INFO | Timing temperature calculation: 0.000 s
+2026-09-27 16:10:19,967 | INFO | Timing temperature calculation: 0.000 s

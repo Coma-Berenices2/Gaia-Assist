@@ -1,605 +1,188 @@
 # Gaia Assist
 
-**Gaia Assist** is a Python desktop application for retrieving and analyzing astronomical data from the **ESA Gaia archive**.
+Gaia Assist retrieves Gaia DR3 measurements and helps explore stellar properties through a desktop app or a local browser interface. Start **`Main.py`** and choose **Explorer** or **Scientist**.
 
-The program takes a Gaia source ID—or, experimentally, the common name of an astronomical object—and retrieves Gaia DR3 data. It then performs additional calculations involving distance, interstellar extinction, photometry, stellar temperature, luminosity, radius, peak wavelength, and stellar classification.
+| Mode | Purpose | Direct desktop entry point |
+| --- | --- | --- |
+| Explorer | Simple object lookup and the original approximate calculations | `Main.py` → Explorer |
+| Scientist | Temperature comparisons, explicit distance selection, provenance and scientific review notes | `Main_temperature.py` |
 
-The application provides results through a Tkinter graphical interface, includes a browser-accessible version, and can save analyzed objects or bulk query tables as text files.
+Scientist is currently **2.5**. It is the focus of future scientific-accuracy improvements. Both modes remain experimental; estimated classifications are not spectroscopic measurements or proof of cluster membership.
 
-> **Status:** Experimental / research project  
-> **Main file:** `Main.py`
-> **Web version:** `WebMain.py`
-> **Slow hosted demo:** https://gaia-assist.onrender.com
+## Install and run
 
----
+Download the **whole repository** using GitHub's **Code → Download ZIP**, extract it, and open a terminal in the extracted folder. Do not download `Main.py` alone. Keep the Python files together with their original names and capitalization.
 
-## Features
+Use **Python 3.10 or newer**; the current test suite has been run with Python 3.13 on Windows. A desktop display and Tkinter are required for the desktop app. Other operating systems have not been fully verified.
 
-Gaia Assist can:
+### Windows
 
-- Query **Gaia DR3** source data.
-- Accept Gaia **DR1, DR2, or DR3** source IDs.
-- Convert older DR1/DR2 identifiers to their corresponding DR3 source.
-- Experimentally resolve an astronomical **common name** through CDS Sesame.
-- Retrieve:
-  - Gaia source ID
-  - Object classification probability
-  - Metallicity
-  - Equatorial coordinates
-  - Galactic coordinates
-  - RA and DEC proper motion
-  - Coordinate uncertainties
-  - Parallax
-  - Parallax signal-to-noise
-  - RUWE
-  - Astrometric excess noise
-  - Radial velocity
-  - G magnitude
-  - BP-RP color
-- Determine the constellation from the object's coordinates.
-- Evaluate several Gaia measurement-quality indicators.
-- Calculate an estimated distance from parallax.
-- Query an external dust calculator for **E(B-V)**.
-- Correct BP-RP for estimated reddening.
-- Calculate absolute and visual magnitudes.
-- Estimate effective temperature.
-- Estimate luminosity and radius.
-- Calculate blackbody peak wavelength using Wien's displacement law.
-- Estimate a stellar spectral/evolutionary classification using the program's HR-diagram rules.
-- Show field explanations and hover previews for result rows.
-- Let users hide Gaia data rows or derived data rows in the main result table.
-- Display warnings for potentially problematic measurements.
-- Select and copy displayed values.
-- Run bulk queries from pasted rows or loaded text/CSV files.
-- Arrange bulk result columns by dragging compact field blocks.
-- Process Gaia source-table lookups in batches of 20 for faster bulk querying.
-- View bulk results in a sheet-like table with 10, 20, or 30 rows per page.
-- Save single-object results and combined bulk results to timestamped text files.
-- Maintain a missing-value log and debug log.
+Install Python with the Tcl/Tk component enabled, then run:
 
-The main calculation pipeline follows the sequence of quality checks → distance → dust extinction → reddening correction → magnitudes → temperature → luminosity/radius → peak wavelength → stellar classification.
-
----
-
-## Requirements
-
-The program uses Python and the following external packages:
-
-- `astropy`
-- `astroquery`
-- `requests`
-
-It also uses Python's built-in:
-
-- `tkinter`
-- `logging`
-- `threading`
-- `queue`
-- `re`
-- `math`
-- `pathlib`
-- `datetime`
-
-The external Python dependencies can be installed with:
-
-```bash
-pip install astropy astroquery requests
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe Main.py
 ```
 
-`tkinter` must also be available in your Python installation because it provides the graphical user interface.
+These commands do not require activating the environment or changing PowerShell's execution policy. Choose Explorer or Scientist in the launch window.
 
-### Recommended project structure
+### macOS / Linux
+
+With Python and Tkinter installed:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python Main.py
+```
+
+Tkinter comes with many Python installers but some Linux distributions package it separately. If `import tkinter` fails, install the Tkinter package matching your Python installation. The app also needs a writable project folder for logs, cached inputs and saved results.
+
+### Python dependencies
+
+`requirements.txt` lists the directly used third-party packages: `astropy`, `astroquery`, `requests`, `numpy` and `matplotlib`. Pip installs their transitive dependencies. Tkinter and SQLite are Python components, not additional pip requirements.
+
+Internet access is required for uncached catalogue, name-resolution, dust-map and sky-image requests. No local Gaia database, API key or GitHub account is needed to use the app. External services can return missing values or be temporarily unavailable.
+
+## Which files do other users need?
+
+The supported distribution includes **all 24 application Python files below**, plus `requirements.txt`. Include `README.md` and `LICENSE` when redistributing. Documentation, tests and deployment configuration belong in the repository but are not runtime dependencies.
 
 ```text
-GaiaAssist/
-├── Main.py
-├── WebMain.py
-├── Requirement.txt
+Gaia-Assist/
+├── Main.py                         # Desktop entry point and Explorer
+├── app_launcher.py                 # Explorer / Scientist chooser
+├── Main_temperature.py             # Scientist desktop and calculations
+├── WebMain.py                      # Explorer browser server
+├── WebMain_temperature.py          # Scientist browser server
+├── cluster_analysis.py
+├── cluster_plots.py
+├── cluster_analysis_window.py
+├── scientist_aux.py
+├── scientist_catalogue.py
+├── scientist_distance.py
+├── scientist_network.py
+├── temperature_carbon.py
+├── temperature_cluster_analysis.py
+├── temperature_cluster_plots.py
+├── temperature_cluster_window.py
+├── temperature_comparison.py
+├── temperature_evaluation.py
+├── temperature_legacy.py
+├── temperature_model.py
+├── temperature_reference.py
+├── temperature_schema.py
+├── temperature_storage.py
+├── temperature_ui.py
+├── requirements.txt
 ├── README.md
-└── saved_objects/          # created automatically when results are saved
+├── LICENSE
+├── .gitignore
+├── render.yaml                     # Optional Explorer web deployment
+├── tests/                          # Developer regression tests
+└── SCIENTIST_*.md / TEMPERATURE_EXPERIMENT.md
 ```
 
-The application does not require a local Gaia database. It queries remote services when an object is analyzed.
+`scientist_network.py` must remain alongside the other files: bounded requests launch it as a separate Python worker. There is no separate `temperature.py` entry point; Scientist uses `Main_temperature.py`.
 
----
+The two web entry points are optional for desktop-only use. `benchmark_scientist_network.py` and the recorded verification/benchmark JSON files are development evidence, not runtime dependencies. No local spreadsheet or downloaded calibration file is required by the current calculation code.
 
-## Running the program
+Do **not** upload or distribute these generated/local items:
 
-Clone or download the repository and enter its directory.
+- `saved_objects/` and `saved_objects_temperature/` (users' saved results).
+- `*.log`, `gaia_missing_values_log.txt` and `temperature_missing_values_log.txt`.
+- `scientist_cache.sqlite3*` and `scientist_network_settings.json`.
+- `.venv/`, `__pycache__/`, credentials, `.env` files and build/distribution output.
 
-Then run:
+The application creates its own result folders, logs and cache as needed. The repository's `.gitignore` excludes them.
 
-```bash
-python Main.py
-```
+## Desktop workflow
 
-The program will open the **Gaia Assist** graphical interface.
+1. Launch `Main.py` and choose a mode.
+2. Enter a Gaia DR3 source ID. DR1/DR2 IDs are resolved to DR3 counterparts; common-name lookup through CDS Sesame is experimental.
+3. Query the object. Read the measurement quality, assumptions and selection notes alongside the numerical results.
+4. Use **Explain** to open field definitions and expanded long values, or **Copy** to select field names, values and units together. Scientist abbreviates long notes on screen while retaining full text for copying and exports.
+5. Click **Show Sky Image** for the optional, centred **5.0′ × 5.0′ DSS2 colour (Optical)** cutout. Desktop image loading follows the numerical results, and the image window opens only when requested.
+6. Save the results. Explorer saves text; Scientist also saves JSON and CSV and can reload saved results without recalculating history. JSON is preferred for complete records and nested settings.
 
-The application creates its GUI with Tkinter and starts the program through `main()`, which initializes the `GaiaAssistApp` window and enters the Tkinter event loop.
+Retrieved values include positions, proper motion, parallax and quality indicators, Gaia photometry, radial velocity and **radial velocity error**. Additional calculations include extinction, magnitudes, temperature estimates, brightness, radius approximations and tentative classifications.
 
-### Install the required dependencies
+### Bulk queries and charts
 
-After installing Python, open a terminal in the Gaia Assist folder and run:
+Use **Bulk Query** to paste IDs/names or load input rows, select columns and review the paginated results. Blue asterisks identify stars with the specified potentially unreliable measurements; clicking the warning explains why they may warrant exclusion from cluster analysis.
 
-```bash
-pip install -r Requirement.txt
-```
+After a completed desktop bulk query containing at least **10 objects**, **Advanced Cluster Analysis** offers:
 
-This will install the external Python packages required by Gaia Assist.
+- A CMD with New BP−RP horizontally from −1 to 4 and absolute magnitude vertically from −10 at the top to 15 at the bottom. Out-of-range or incomplete points are omitted.
+- A spectral classification count grid, with spectral subtypes across columns and luminosity classes down rows. The first listed estimated type is used when there are several possibilities.
 
----
+Users can include or exclude flagged stars and save figures as PNG, PDF or SVG and chart data as CSV. Scientist keeps carbon-star candidates separate from the ordinary spectral grid. These charts do not independently establish cluster membership.
 
-# Running the web version
+## Scientist settings and interpretation
 
-Gaia Assist also includes a local browser version:
+### Distance
 
-```bash
+**Distance Settings** provides:
+
+- **Baseline:** the existing inverse-parallax result, `1000 / parallax_mas`, retaining the Scientist validity checks (finite positive parallax and parallax signal-to-noise at least 5).
+- **Bayesian geometric:** the published Bailer-Jones EDR3 geometric distance when usable, otherwise an explicit fallback to the valid baseline.
+- **Automatic** (default): retains a usable baseline when fractional parallax uncertainty is at most **10%**; otherwise prefers a usable Bayesian geometric estimate. The threshold is configurable application policy, not a universal scientific boundary.
+
+Baseline, Bayesian median and 16th/84th percentile bounds remain separate from the adopted distance. Catalogue flags and astrometric warnings remain visible. Distance-dependent extinction, magnitudes, radius estimates and classification use the adopted distance consistently. Published distances are not given a second parallax zero-point correction. See [distance implementation and catalogue references](SCIENTIST_DISTANCE.md).
+
+### Temperature, radius and classification
+
+Scientist compares applicable Gaia and BP−RP temperature estimates, records the adopted source and preserves missing values and applicability warnings. An explicitly approximate Explorer fallback is available when stronger estimates are unavailable.
+
+Fresh results also include separately labelled Explorer comparison temperature, radius and classification. These are distinct from historical `legacy_*` values imported from old files.
+
+**Approximate radius — G-band method** uses G-band brightness as a proxy for total luminosity and records the adopted temperature and extinction assumptions. It does not replace **Bolometric Radius**, which requires valid inputs and an applicable, sourced bolometric correction. Carbon-star candidate identification is not overwritten by an ordinary-star-equivalent estimate. See [comparisons and radius](SCIENTIST_COMPARISON_AND_RADIUS.md) and [temperature methods and limitations](TEMPERATURE_EXPERIMENT.md).
+
+### Responsiveness and caching
+
+Scientist publishes preliminary results before optional enrichment, batches catalogue requests, caches successful matches and no-match results, and supports cancellation, timeout settings and force refresh. A failed request is not cached as confirmed catalogue absence. Changing scientific settings and rerunning reuses cached inputs where possible. Loading saved files preserves their recorded calculations.
+
+See [network behaviour and carbon-star handling](SCIENTIST_NETWORK_AND_CARBON.md). Service response times vary; earlier benchmarks are observations, not performance guarantees.
+
+## Local browser versions
+
+With dependencies installed, run one of:
+
+```sh
 python WebMain.py
+python WebMain_temperature.py
 ```
 
-The server prints the exact local URL to open, for example:
+Use the Python executable from your virtual environment in place of `python` when needed. Explorer defaults to port **65000** and Scientist to **65001**. Open the address printed by the server, normally `http://127.0.0.1:65000/` or `http://127.0.0.1:65001/`.
 
-```text
-Gaia Assist Web is running at http://127.0.0.1:65000/
+`HOST`, `PORT` and `GAIA_ASSIST_PORT` can configure the server. The current default bind address is `0.0.0.0`; set `HOST=127.0.0.1` for local-only access. These simple servers do not implement user authentication and are intended for trusted use. Stop them with Ctrl+C.
+
+The browser interfaces support single/bulk queries and saves. Scientist also offers distance/temperature controls and saved-file loading. Desktop sky-image windows and Advanced Cluster Analysis are desktop features; browser capabilities should not be assumed identical. Web saves go to the server's result folder.
+
+`render.yaml` retains the Explorer deployment command `python WebMain.py`. Deploying Scientist instead requires explicitly changing that command to `python WebMain_temperature.py` in the hosting configuration. The existing hosted deployment is not changed by choosing Scientist in the desktop launcher.
+
+## Development and verification
+
+From the project root, with dependencies and Tkinter available:
+
+```sh
+python -m unittest discover -s tests -q
 ```
 
-You may also choose a port manually:
+The suite includes native Tk tests, so a graphical desktop is needed for the full run. The latest application verification passed **126 tests** on Windows/Python 3.13. Tests cover scientific selection policies, invalid/missing inputs, exact Gaia IDs, caching/cancellation, display/copy behaviour, bulk analysis and save/load compatibility. They are not a validation of every astrophysical model against observations.
 
-```bash
-python WebMain.py 53021
-```
+Main implementation notes:
 
-If the chosen port is busy, the web server attempts to fall back to an available port and prints the final URL.
+- [Scientist distance selection](SCIENTIST_DISTANCE.md)
+- [Explorer comparisons and approximate radius](SCIENTIST_COMPARISON_AND_RADIUS.md)
+- [Network/cache and carbon-star candidates](SCIENTIST_NETWORK_AND_CARBON.md)
+- [Temperature methods and development history](TEMPERATURE_EXPERIMENT.md)
 
-A slow hosted version is available at:
+## Credits and licence
 
-```text
-https://gaia-assist.onrender.com
-```
+Gaia measurements are obtained from the ESA Gaia Archive. Distance, extinction and temperature methods and their primary references are documented in the linked Scientist notes. Sky cutouts use ESA services with CDS hips2fits fallback; DSS imagery is credited to STScI/NASA, with colour processing by CDS.
 
-The hosted version may respond slowly because it depends on remote Gaia, Sesame, and dust-map services, and because free/hosted web services can take time to wake up.
+Gaia Assist is an independent project, not an official ESA application. Verify important results against source data and appropriate scientific literature.
 
----
-
-# Using Gaia Assist
-
-## 1. Enter a Gaia source ID
-
-Enter the object's Gaia source ID into the input field.
-
-For example:
-
-```text
-5853498713190525696
-```
-
-Select the corresponding Gaia release:
-
-- `DR3`
-- `DR2`
-- `DR1`
-
-The program expects numerical source IDs for these modes.
-
-Then click:
-
-**Start Query**
-
----
-
-## 2. Using DR2 or DR1
-
-If you select `DR2` or `DR1`, Gaia Assist attempts to find the corresponding Gaia DR3 source.
-
-For DR2, the program uses the Gaia DR3 `dr2_neighbourhood` crossmatch table.
-
-For DR1, it performs a two-stage DR1 → DR2 → DR3 crossmatch.
-
-The final analysis is performed using the corresponding **Gaia DR3** source.
-
----
-
-## 3. Using a common name
-
-The interface also contains an experimental:
-
-```text
-Common Name (Testing)
-```
-
-mode.
-
-For example, a user can enter a recognized astronomical object name instead of a Gaia source ID.
-
-The program first queries **CDS Sesame**. If Sesame returns a Gaia identifier, the program attempts to resolve it to Gaia DR3. If only coordinates are returned, Gaia Assist searches for the nearest Gaia DR3 source within **30 arcseconds**. 
-### Important
-
-The common-name functionality is explicitly labeled **testing** in the program and should not be considered as reliable as directly entering a Gaia source ID.
-
----
-
-## 4. Hiding result groups
-
-The main result table includes two visibility controls:
-
-- **Hide Gaia Data** hides raw values queried directly from Gaia.
-- **Hide Derived Data** hides values calculated by Gaia Assist.
-
-These controls only affect what is displayed in the main window. They do not change the underlying query or calculation pipeline.
-
----
-
-# Bulk queries
-
-The desktop and web versions include a bulk query workflow for analyzing many objects together.
-
-Bulk query supports:
-
-- Pasting many object IDs or names into a large input box.
-- Loading object rows from a `.txt` or `.csv` file.
-- One object per row.
-- A single input mode for the entire list: `DR3`, `DR2`, `DR1`, or `Common Name (Testing)`.
-- Choosing which result fields to include.
-- Dragging compact field blocks to control the final column order.
-- Displaying results in a sheet-like table.
-- Viewing 10, 20, or 30 objects per page.
-- Copying table values.
-- Saving all displayed bulk results into one timestamped file.
-
-For speed, Gaia Assist processes Gaia source-table lookups in batches of 20 when possible. It also runs several per-source derived calculations in parallel. DR3 source IDs benefit the most from batching. DR2, DR1, and common-name inputs still require additional resolution steps before the final DR3 data can be queried.
-
-Bulk queries can still take a long time because Gaia Assist may need to contact the ESA Gaia Archive, CDS Sesame, and the NADC dust calculator many times.
-
----
-
-# What the program calculates
-
-## Distance
-
-For usable positive parallax measurements, the program calculates:
-
-```text
-distance (pc) = 1000 / parallax (mas)
-```
-
-It then converts parsecs to light-years using the conversion factor contained in the program.
-
-### Important limitation
-
-This is the simple inverse-parallax calculation. It should not automatically be treated as the statistically optimal distance estimate for every Gaia source, particularly when the parallax uncertainty is large.
-
-Gaia Assist therefore evaluates `parallax_over_error` before proceeding with the rest of the calculation pipeline.
-
----
-
-## Parallax quality
-
-The program classifies `parallax_over_error` using its own thresholds:
-
-| Parallax / Error | Classification |
-|---:|---|
-| ≥ 20 | Accurate |
-| ≥ 10 | Acceptable |
-| ≥ 5 | Moderate |
-| ≥ 2 | Inaccurate |
-| < 2 | Unreliable |
-
-Negative parallax causes the downstream distance-dependent calculations to stop.
-
----
-
-## Dust extinction and reddening
-
-Gaia Assist sends the object's Galactic longitude, Galactic latitude, and calculated distance to the external **NADC dust calculator**.
-
-It retrieves an `E(B-V)` value and uses it to calculate:
-
-```text
-Mean G-band extinction = E(B-V) × 2.74
-
-BP-RP reddening = E(B-V) × 1.21
-```
-
-The corrected color is then:
-
-```text
-New BP-RP = Gaia BP-RP - BP-RP reddening
-```
-
-The dust query is performed remotely and can therefore fail if the external service is unavailable or its response format changes. 
----
-
-## Absolute magnitude
-
-The program calculates an extinction-corrected absolute magnitude using the object's G-band magnitude, distance, and estimated G-band extinction:
-
-```text
-M = G - 5 log10(d) + 5 - A_G
-```
-
-where:
-
-- `M` = calculated absolute magnitude
-- `G` = Gaia mean G magnitude
-- `d` = distance in parsecs
-- `A_G` = calculated G-band extinction
-
-
-
----
-
-## Luminosity
-
-The program estimates luminosity in solar units from absolute magnitude:
-
-```text
-L/L☉ = 10^[0.4 × (4.67 - M)]
-```
-
-The value `4.67` is the solar absolute magnitude used by this implementation.
-
----
-
-## Effective temperature
-
-The program estimates effective temperature primarily from the dereddened BP-RP color.
-
-Different polynomial/empirical relations are selected depending on the color, metallicity availability, and whether the object falls into the program's red-dwarf condition.
-
-The implementation contains separate relations for:
-
-- Negative BP-RP values
-- Red-dwarf candidates
-- Objects without metallicity
-- Objects with metallicity
-
-The resulting temperature is reported in kelvin.
-
-> **Important:** These are the relationships implemented in this project. Users should verify the scientific calibration and applicable validity ranges before using the results for research-grade work.
-
----
-
-## Radius
-
-Radius is estimated using the Stefan-Boltzmann relation.
-
-The program first converts the calculated solar luminosity to watts and then calculates the radius from luminosity and effective temperature. The result is converted back into solar radii.
-
----
-
-## Peak wavelength
-
-The program uses Wien's displacement law:
-
-```text
-λmax = b / T
-```
-
-where `b` is the Wien displacement constant and `T` is the calculated effective temperature.
-
-The result is displayed in nanometers.
-
----
-
-## Stellar classification
-
-Gaia Assist contains an internal set of HR-diagram rules covering spectral subclasses and luminosity classes.
-
-The program uses:
-
-1. Estimated effective temperature to determine a spectral subclass.
-2. Visual absolute magnitude to determine possible evolutionary/luminosity classes.
-3. The resulting combination to produce a classification.
-
-Examples of possible classifications include forms such as:
-
-```text
-G2V
-K5V
-M3V
-B1III
-```
-
-The program also has special handling for white dwarfs, subdwarfs, and Wolf-Rayet-related classifications. The classification rules are defined directly in `Main.py`.
-
-Because these classifications are from the project's internal datas, they should be regarded as **estimates**, not authoritative Gaia catalog classifications.
-
----
-
-# Measurement-quality checks
-
-Gaia Assist includes several checks intended to help users interpret the retrieved measurements.
-
-These include:
-
-### Coordinate errors
-
-RA and DEC errors are classified using thresholds ranging from `accurate` to `unreliable`.
-
-### RUWE
-
-RUWE is classified using the program's own thresholds, including:
-
-- unreliable
-- good
-- perfect
-- accurate
-- questionable
-
-
-
-### BP/RP excess flux
-
-The program calculates a corrected BP/RP excess quantity and compares it with a calculated tolerance. The result can be classified as:
-
-- accurate
-- inaccurate
-- unreliable
-
-
-
-### Astrometric excess noise
-
-The program also evaluates:
-
-- Excess Noise Factor
-- Excess Noise Significance
-
-These can provide additional indications that an object's astrometric solution may require caution.
-
----
-
-# Saving results
-
-After successfully analyzing an object, click:
-
-**Save**
-
-Gaia Assist creates a `saved_objects` directory automatically and writes the object's results to a timestamped `.txt` file.
-
-Example:
-
-```text
-saved_objects/
-└── gaia_5853498713190525696_20260816_194500_123456.txt
-```
-
-The saved file contains:
-
-- Save timestamp
-- Input mode
-- Input value
-- Field names
-- Values
-- Units
-
-Bulk query saves create a combined timestamped file containing all displayed result rows and the selected output columns.
-
-
-
----
-
-# Logs
-
-The program creates two useful log files next to `Main.py`.
-
-### `gaia_assist_debug.log`
-
-Contains diagnostic information about queries, retries, errors, and other program events.
-
-### `gaia_missing_values_log.txt`
-
-Records Gaia source fields that were unavailable for a queried object.
-
-The missing-value logger records the timestamp, source ID, and fields that were missing.
-
-If the application reports that a service failed, checking `gaia_assist_debug.log` is the first recommended troubleshooting step.
-
----
-
-# External services
-
-Gaia Assist communicates with several external astronomical services:
-
-| Service | Purpose |
-|---|---|
-| **ESA Gaia Archive** | Gaia source data and Gaia crossmatching |
-| **CDS Sesame** | Experimental common-name resolution |
-| **NADC Dust Calculator** | E(B-V) dust/extinction values |
-
-The program also uses `astroquery.gaia.Gaia` to submit Gaia archive queries.
-
-Because these services are external, Gaia Assist requires an active internet connection while performing queries.
-
----
-
-# Troubleshooting
-
-## "Gaia source could not be completed"
-
-Check:
-
-1. Your internet connection.
-2. That the Gaia source ID contains digits only.
-3. That the source actually exists in the selected Gaia release.
-4. `gaia_assist_debug.log` for additional information.
-
-The program automatically retries several external requests before reporting a failure.
-
----
-
-## Dust information is unavailable
-
-If the Gaia data are successfully retrieved but the dust service cannot be reached, the program can still display the Gaia measurements.
-
-However, calculations depending on extinction may be unavailable.
-
-The application explicitly reports an `NADC dust data unavailable` warning when dust data were expected but could not be obtained.
-
----
-
-## Some results show `-`
-
-A `-` generally indicates that the required input data were unavailable or that a downstream calculation could not be performed.
-
-For example, if a source has unusable parallax, the program stops the distance-dependent portion of the calculation pipeline rather than producing a distance from invalid data.
-
----
-
-# Scientific limitations
-
-Gaia Assist is intended as an **educational, exploratory, and analytical tool**.
-
-Its output should not automatically be considered publication-quality astronomical measurements.
-
-In particular:
-
-- Several quantities are derived rather than directly measured by Gaia.
-- Distance is calculated using inverse parallax.
-- Extinction depends on an external dust-map service.
-- Effective temperature is estimated from empirical relations implemented in the program.
-- Luminosity and radius depend on those preceding estimates.
-- Stellar classification is based on the project's internal HR-diagram rules.
-- External services may change their APIs or web-page formats.
-- Missing or uncertain Gaia measurements can propagate uncertainty into later calculations.
-
-For scientific research, users should independently verify the underlying Gaia measurements, calibrations, extinction model, and classification methodology.
-
----
-
-# Project structure
-
-The current project is intentionally simple:
-
-```text
-GaiaAssist/
-│
-├── Main.py
-├── WebMain.py
-├── Requirement.txt
-├── README.md
-│
-└── saved_objects/
-    ├── gaia_<source_id>_<timestamp>.txt
-    └── ...
-```
-
-`Main.py` contains the desktop GUI, Gaia queries, external-service communication, quality checks, calculations, classification rules, bulk-query logic, and result-saving logic.
-
-`WebMain.py` provides a browser-accessible interface that reuses the calculation and query logic from `Main.py`.
-
----
-
-# Contributing
-
-Suggestions, bug reports, improvements to the calculations, and additional Gaia-related features are welcome.
-
----
-
-# Disclaimer
-
-Gaia Assist is an independent project and is not an official ESA Gaia application.
-
-The software retrieves publicly available astronomical data from external services and performs additional calculations using formulas and classification rules implemented in this project.
-
-Always verify important astronomical results against the original Gaia data and appropriate scientific literature.
+Distributed under the [MIT licence](LICENSE).
