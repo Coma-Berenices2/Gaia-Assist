@@ -1446,12 +1446,15 @@ class GaiaAssistWebHandler(BaseHTTPRequestHandler):
 
 
 def main():
+    import WebMain as explorer
+    from web_modes import make_handler
+    handler = make_handler(explorer, sys.modules[__name__])
     port = PORT
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
 
     try:
-        server = ThreadingHTTPServer((HOST, port), GaiaAssistWebHandler)
+        server = ThreadingHTTPServer((HOST, port), handler)
     except OSError as error:
         if error.errno not in (10048, 98):
             raise
@@ -1460,7 +1463,7 @@ def main():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind((HOST, 0))
             port = probe.getsockname()[1]
-        server = ThreadingHTTPServer((HOST, port), GaiaAssistWebHandler)
+        server = ThreadingHTTPServer((HOST, port), handler)
 
     port = server.server_address[1]
     display_host = "localhost" if HOST in ("0.0.0.0", "::") else HOST

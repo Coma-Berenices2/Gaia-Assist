@@ -1211,12 +1211,15 @@ class GaiaAssistWebHandler(BaseHTTPRequestHandler):
 
 
 def main():
+    import WebMain_temperature as scientist
+    from web_modes import make_handler
+    handler = make_handler(sys.modules[__name__], scientist)
     port = PORT
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
 
     try:
-        server = ThreadingHTTPServer((HOST, port), GaiaAssistWebHandler)
+        server = ThreadingHTTPServer((HOST, port), handler)
     except OSError as error:
         if error.errno not in (10048, 98):
             raise
@@ -1225,13 +1228,17 @@ def main():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind((HOST, 0))
             port = probe.getsockname()[1]
-        server = ThreadingHTTPServer((HOST, port), GaiaAssistWebHandler)
+        server = ThreadingHTTPServer((HOST, port), handler)
 
     port = server.server_address[1]
     display_host = "localhost" if HOST in ("0.0.0.0", "::") else HOST
     url = f"http://{display_host}:{port}/"
     print(f"Gaia Assist Web is running at {url}", flush=True)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        scientist.network.cancel_all()
+        server.server_close()
 
 
 if __name__ == "__main__":
