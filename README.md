@@ -225,16 +225,31 @@ For calculation details, assumptions and references:
 
 ### Screenshots
 
+These October 2026 captures show a browser lookup and the desktop Scientist workflow.
+
 <details>
-<summary>Explorer and Scientist interfaces</summary>
+<summary>Explorer · look up a single star</summary>
 
-**Explorer** shows the results of a lookup for Gaia DR3 `5541416631229166720`, a source from the NGC 2546A candidate list.
+Explorer resolves **55 Cnc** using the experimental common-name lookup and displays its Gaia source ID alongside estimated distance, magnitudes, temperature and radius.
 
-![Explorer in the hosted demo, showing a Gaia source ID, coordinates, constellation, distance and magnitudes](docs/images/explorer-results.jpg)
+![Explorer browser results for 55 Cnc, showing the matched Gaia DR3 source, distance, magnitudes, temperature and radius](docs/images/explorer-lookup.png)
 
-**Scientist** shows the adopted temperature, method and review status for ξ² Centauri. The hosted demo retained this preview after the query stopped.
+</details>
 
-![Scientist in the hosted demo, showing a retained preview with an adopted temperature of 10,000 K from Gaia GSP-Phot and a needs_review status](docs/images/scientist-results.jpg)
+<details>
+<summary>Scientist · review results, compare distances and view the sky</summary>
+
+Scientist shows the catalogue provider, the adopted temperature and its source, and review notes alongside an approximate radius and tentative stellar classification.
+
+![Scientist desktop results showing the Gaia database, adopted temperature and source, review notes, approximate radius and tentative stellar classification](docs/images/scientist-desktop.png)
+
+The distance panel shows both the inverse-parallax estimate and the Bayesian geometric estimate, with an explanation of why **Automatic** chose the former.
+
+![Scientist distance comparison with inverse-parallax and Bayesian geometric estimates, percentile bounds and Automatic selection reason](docs/images/scientist-distance.png)
+
+**Show Sky Image** opens a 5.0′ × 5.0′ DSS2 colour cutout centred on the selected Gaia source in a separate desktop window. Image credits shown in the app are DSS2 (STScI/NASA, CDS) and ESA ESASky.
+
+![Desktop sky-image window showing a DSS2 optical star field centred on Gaia DR3 source 3401845786149805056](docs/images/desktop-sky-image.png)
 
 </details>
 
