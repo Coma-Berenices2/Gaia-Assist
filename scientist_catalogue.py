@@ -13,14 +13,38 @@ PARAMETER_FIELDS = ("classprob_dsc_combmod_quasar", "classprob_dsc_combmod_galax
 def build_query(ids, kind="joined"):
     if any(not isinstance(i, str) or not i.isdigit() for i in ids):
         raise ValueError("Gaia identifiers must be exact digit strings")
+    schema = net.service().dr3_schema
+    top = f"TOP {len(ids)+10} "
     if kind == "parameters":
-        return f"SELECT source_id, {', '.join(PARAMETER_FIELDS)} FROM gaiadr3.astrophysical_parameters WHERE source_id IN ({','.join(ids)})"
+        return f"SELECT {top}source_id, {', '.join(PARAMETER_FIELDS)} FROM {schema}.astrophysical_parameters WHERE source_id IN ({','.join(ids)})"
     fields = ", ".join("g."+key for key in SOURCE_FIELDS)
     join = ""
     if kind == "joined":
         fields += ", a.source_id AS ap_source_id, " + ", ".join("a."+key for key in PARAMETER_FIELDS)
-        join = " LEFT OUTER JOIN gaiadr3.astrophysical_parameters AS a ON g.source_id=a.source_id"
-    return f"SELECT {fields} FROM gaiadr3.gaia_source AS g{join} WHERE g.source_id IN ({','.join(ids)})"
+        join = f" LEFT OUTER JOIN {schema}.astrophysical_parameters AS a ON g.source_id=a.source_id"
+    return f"SELECT {top}{fields} FROM {schema}.gaia_source AS g{join} WHERE g.source_id IN ({','.join(ids)})"
+
+
+def index_rows(rows, ids):
+    found = {}
+    for row in rows:
+        identifier = row.get("source_id")
+        if isinstance(identifier, (float, bool)) or not isinstance(identifier, (str, int)) or not str(identifier).isascii() or not str(identifier).isdigit():
+            raise net.NetworkFailure("Gaia response source ID is not an exact integer/string")
+        identifier = str(identifier)
+        if identifier not in ids or identifier in found:
+            raise net.NetworkFailure("Gaia response contains an unexpected or duplicate source ID")
+        ap_id = row.get("ap_source_id")
+        if ap_id is not None and (isinstance(ap_id, (float, bool)) or str(ap_id) != identifier):
+            raise net.NetworkFailure("Gaia source/AP identifiers do not match")
+        found[identifier] = row
+    return found
+
+
+def query_rows(ids, kind="joined", **kwargs):
+    rows = net.tap_query(build_query(ids, kind), len(ids), **kwargs)
+    index_rows(rows, ids)  # Validate before writing any successful cache entry.
+    return rows
 
 
 def fetch(ids, release="DR3", on_basic=None):
@@ -33,6 +57,7 @@ def fetch(ids, release="DR3", on_basic=None):
     context = net.CURRENT.get()
     options = context.options if context else net.settings()
     force = bool(context and context.force_refresh)
+    selected = net.service(options)
     ids = list(dict.fromkeys(ids))
     source_rows, parameters, statuses, errors = {}, {}, {}, {}
     def key(kind, identifier):
@@ -53,6 +78,8 @@ def fetch(ids, release="DR3", on_basic=None):
         if sr is None:
             return None
         result = app.build_source_data_from_gaia_rows(sr, parameters.get(identifier) or app.default_astrophysical_row())
+        result.update(gaia_catalogue_service=selected.label, gaia_catalogue_endpoint=selected.endpoint,
+                      gaia_catalogue_release="Gaia DR3", gaia_catalogue_retrieved_utc=sr.get("_catalogue_retrieved_utc"))
         result.update(statuses.get(identifier, {"gaia_ap_status": "pending", "gaia_ap_message": "Waiting for optional Gaia parameters"}))
         return result
     for identifier in ids:
@@ -63,11 +90,13 @@ def fetch(ids, release="DR3", on_basic=None):
     if missing:
         try:
             rows = net.cached("joined", [release, missing, SOURCE_FIELDS, PARAMETER_FIELDS],
-                lambda: net.tap_query(build_query(missing), len(missing), limit=options.optional_timeout))
-            found = {str(row["source_id"]): row for row in rows}
+                lambda: query_rows(missing, limit=options.optional_timeout))
+            found = index_rows(rows, missing)
             for identifier in missing:
                 row = found.get(identifier)
                 sr = None if row is None else {k: row.get(k) for k in SOURCE_FIELDS}
+                if sr is not None:
+                    sr["_catalogue_retrieved_utc"] = row.get("_catalogue_retrieved_utc")
                 pr = None if row is None or row.get("ap_source_id") is None else {k: row.get(k) for k in PARAMETER_FIELDS}
                 source_rows[identifier], parameters[identifier] = sr, pr
                 statuses[identifier] = app.astrophysical_query_status(pr is not None)
@@ -82,8 +111,8 @@ def fetch(ids, release="DR3", on_basic=None):
             for identifier in missing:
                 statuses[identifier] = {"gaia_ap_status": state, "gaia_ap_message": str(error)}
             try:
-                rows = net.tap_query(build_query(missing, "source"), len(missing))
-                found = {str(r["source_id"]): r for r in rows}
+                rows = query_rows(missing, "source")
+                found = index_rows(rows, missing)
                 for identifier in missing:
                     source_rows[identifier] = found.get(identifier)
                     net.cache_put(key("source", identifier), source_rows[identifier])
@@ -99,8 +128,8 @@ def fetch(ids, release="DR3", on_basic=None):
         if context:
             context.report("Waiting for Gaia parameters; basic results available")
         try:
-            rows = net.tap_query(build_query(enrich, "parameters"), len(enrich), limit=options.optional_timeout)
-            found = {str(r["source_id"]): r for r in rows}
+            rows = query_rows(enrich, "parameters", limit=options.optional_timeout)
+            found = index_rows(rows, enrich)
             for identifier in enrich:
                 parameters[identifier] = found.get(identifier)
                 statuses[identifier] = app.astrophysical_query_status(identifier in found)
@@ -116,5 +145,5 @@ def fetch(ids, release="DR3", on_basic=None):
         if record is not None:
             results[identifier] = record
         elif identifier not in errors:
-            errors[identifier] = app.QueryServiceError("ESA Gaia", "Query completed; no source found for "+identifier)
+            errors[identifier] = app.QueryServiceError(selected.label, "Query completed; no source found for "+identifier)
     return results, errors

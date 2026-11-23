@@ -1,0 +1,12 @@
+{
+  "request_timeout": 15.0,
+  "overall_timeout": 60.0,
+  "optional_timeout": 20.0,
+  "cache_ttl": 86400.0,
+  "batch_size": 20,
+  "sync_limit": 20,
+  "attempts": 2,
+  "poll_interval": 0.75,
+  "catalogue_service": "esa",
+  "resolver_service": "harvard"
+}

@@ -76,6 +76,9 @@ class DesktopSession:
         if self.current:
             self.apps[self.current].root.withdraw()
         self.current = mode
+        if hasattr(self.apps[mode], "resolver_choice"):
+            from name_resolver import LABELS, selected_service
+            self.apps[mode].resolver_choice.set(LABELS[selected_service()])
         self.apps[mode].root.deiconify()
         self.apps[mode].root.lift()
         return True

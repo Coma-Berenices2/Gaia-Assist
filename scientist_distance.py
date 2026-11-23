@@ -14,6 +14,10 @@ REFERENCE = "https://bailer-jones.www3.mpia.de/gedr3_distances.html"
 LY_PER_PC = 3.26156  # Preserve the application's existing conversion.
 FIELDS = ("source_id", "r_med_geo", "r_lo_geo", "r_hi_geo", "flag")
 RAW_FIELDS = {
+    "bayesian_catalogue_service": "Distance catalogue database",
+    "bayesian_catalogue_endpoint": "Distance catalogue endpoint",
+    "bayesian_catalogue_table": "Distance catalogue table",
+    "bayesian_catalogue_retrieved_utc": "Distance catalogue retrieved (UTC)",
     "bayesian_distance_pc": "Bayesian geometric distance",
     "bayesian_distance_lower_pc": "Bayesian distance — 16th percentile",
     "bayesian_distance_upper_pc": "Bayesian distance — 84th percentile",
@@ -70,7 +74,8 @@ def exact_id(value):
 
 
 def cache_key(identifier):
-    return net.cache_key("bayesian-geometric", ["Gaia EDR3=DR3", VERSION, net.BASE, TABLE, FIELDS, identifier])
+    selected = net.service()
+    return net.cache_key("bayesian-geometric", ["Gaia EDR3=DR3", VERSION, selected.distance_endpoint, selected.distance_table, FIELDS, identifier])
 
 
 def catalogue_record(row, status="retrieved", message=""):
@@ -91,13 +96,21 @@ def fetch(ids):
     ids = list(dict.fromkeys(exact_id(i) for i in ids))
     context = net.CURRENT.get()
     options = context.options if context else net.settings()
+    selected = net.service(options)
+    def record(row, status, message=""):
+        result = catalogue_record(row, status, message)
+        result.update(bayesian_catalogue_service="ESA Gaia (official)" if selected.key == "esa" else "GAVO",
+                      bayesian_catalogue_endpoint=selected.distance_endpoint,
+                      bayesian_catalogue_table=selected.distance_table,
+                      bayesian_catalogue_retrieved_utc=row.get("_catalogue_retrieved_utc") if row else None)
+        return result
     records, missing = {}, []
     for identifier in ids:
         if context and context.cancel.is_set():
             raise net.QueryCancelled("Query cancelled")
         hit, row = net.cache_get(cache_key(identifier), force=bool(context and context.force_refresh), options=options)
         if hit:
-            records[identifier] = catalogue_record(row, "retrieved" if row else "no_match")
+            records[identifier] = record(row, "retrieved" if row else "no_match")
         else:
             missing.append(identifier)
     for start in range(0, len(missing), options.batch_size):
@@ -105,9 +118,9 @@ def fetch(ids):
         try:
             if context:
                 context.report("Basic results available; looking up optional geometric distances")
-            query = f"SELECT {', '.join(FIELDS)} FROM {TABLE} WHERE source_id IN ({','.join(batch)})"
+            query = f"SELECT {', '.join(FIELDS)} FROM {selected.distance_table} WHERE source_id IN ({','.join(batch)})"
             limit = min(options.optional_timeout, max(.01, context.check()-1.0)) if context else options.optional_timeout
-            rows = net.tap_query(query, len(batch), limit=limit)
+            rows = net.tap_query(query, len(batch), limit=limit, endpoint=selected.distance_endpoint)
             if context:
                 context.check()
             found = {}
@@ -119,13 +132,13 @@ def fetch(ids):
             for identifier in batch:
                 row = found.get(identifier)
                 net.cache_put(cache_key(identifier), row)
-                records[identifier] = catalogue_record(row, "retrieved" if row else "no_match")
+                records[identifier] = record(row, "retrieved" if row else "no_match")
         except net.QueryCancelled:
             raise
         except (net.NetworkFailure, ValueError) as error:
             status = "query_timed_out" if isinstance(error, net.QueryTimeout) else "query_failed"
             for identifier in batch:
-                records[identifier] = catalogue_record(None, status, str(error))
+                records[identifier] = record(None, status, str(error))
     return records
 
 
@@ -195,7 +208,9 @@ def evaluate_distance(source, options):
         chosen, method = bayes, "Bayesian geometric (published EDR3)"
         reason = "Bayesian geometric mode: usable published geometric estimate" if mode == "Bayesian geometric" else "Automatic: baseline invalid, uncertainty unavailable, or above policy threshold; prefer usable geometric estimate"
     else:
-        reason = f"{mode}: Bayesian geometric unavailable ({quality}); " + ("fallback to valid baseline" if baseline is not None else "baseline also unavailable")
+        reason = (f"{mode}: using valid inverse-parallax fallback; optional geometric distance unavailable"
+                  if baseline is not None else
+                  f"{mode}: distance unavailable; temperature-only estimation remains possible")
     warnings = []
     ruwe = number(source.get("ruwe"))
     if ruwe is None:

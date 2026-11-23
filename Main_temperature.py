@@ -103,7 +103,7 @@ DERIVED_COLUMNS.update(effective_temperature="Adopted Temperature", luminosity="
 ALL_DISPLAY_COLUMNS = {**GAIA_COLUMNS, **DERIVED_COLUMNS}
 
 PRIMARY_DISPLAY_ORDER = (
-    "source_id", "object_type", *TEMPERATURE_DISPLAY_ORDER,
+    "source_id", "object_type", "gaia_catalogue_service", *TEMPERATURE_DISPLAY_ORDER,
     *DISTANCE_DISPLAY_ORDER, "distance_parsecs", "distance_lightyears", "parallax", "parallax_error", "parallax_over_error",
     "parallax_correctness", "parallax_data_status",
     "phot_g_mean_mag", "phot_bp_mean_mag", "phot_rp_mean_mag", "bp_rp", "new_bp_rp",
@@ -126,6 +126,141 @@ DISPLAY_COLUMNS.update(
         for column_name, label in ALL_DISPLAY_COLUMNS.items()
         if column_name not in PRIMARY_DISPLAY_ORDER
     }
+)
+
+
+# Default Scientist bulk selection, in the user-requested result order.
+DEFAULT_BULK_COLUMNS = (
+    'source_id',
+    'object_type',
+    'star_type',
+    'classification_status',
+    'explorer_comparison_classification',
+    'carbon_star_badge',
+    'population_hypothesis',
+    'pmra',
+    'pmdec',
+    'radial_velocity',
+    'radial_velocity_error',
+    'distance_selection_reason',
+    'baseline_distance_pc',
+    'baseline_distance_ly',
+    'bayesian_distance_pc',
+    'bayesian_distance_ly',
+    'bayesian_distance_lower_pc',
+    'bayesian_distance_upper_pc',
+    'distance_ratio',
+    'distance_change_percent',
+    'distance_parsecs',
+    'distance_lightyears',
+    'parallax',
+    'parallax_error',
+    'parallax_over_error',
+    'g_magnitude_used',
+    'g_magnitude_status',
+    'phot_g_mean_mag',
+    'phot_bp_mean_mag',
+    'phot_rp_mean_mag',
+    'absolute_magnitude',
+    'visual_absolute_magnitude',
+    'visual_apparent_magnitude',
+    'luminosity',
+    'effective_temperature',
+    'adopted_temperature_source',
+    'temperature_status',
+    'temperature_selection_reason',
+    'temperature_concerns',
+    'gaia_temperature',
+    'gaia_temperature_source',
+    'bp_rp_temperature',
+    'bp_rp_temperature_method',
+    'bp_rp_temperature_status',
+    'explorer_comparison_temperature',
+    'bp_rp',
+    'new_bp_rp',
+    'scientific_bp_rp_temperature',
+    'fallback_colour',
+    'ruwe',
+    'ruwe_correctness',
+    'phot_bp_rp_excess_factor',
+    'corrected_excess_flux',
+    'bp_rp_excess_correctness',
+    'photometry_status',
+    'astrometric_excess_noise',
+    'astrometric_excess_noise_sig',
+    'mean_g_band_extinction',
+    'bp_rp_reddening',
+    'ebv',
+    'extinction_source',
+    'ag_gspphot',
+    'ebpminrp_gspphot',
+    'ra_hms_dec',
+    'constellation',
+    'ra',
+    'ra_error',
+    'dec',
+    'dec_error',
+    'radius_approx_solar',
+    'radius',
+    'radius_approx_temperature_source',
+    'explorer_comparison_radius',
+    'metallicity',
+    'logg_gspphot',
+    'mh_gspphot',
+    'gaia_catalogue_service',
+    'explorer_comparison_notes',
+    'adopted_distance_pc',
+    'adopted_distance_ly',
+    'adopted_distance_method',
+    'gaia_catalogue_endpoint',
+    'gaia_catalogue_release',
+    'gaia_catalogue_retrieved_utc',
+    'bayesian_catalogue_service',
+    'bayesian_catalogue_endpoint',
+    'bayesian_catalogue_table',
+    'bayesian_catalogue_retrieved_utc',
+    'bayesian_source_id',
+    'bayesian_distance_flag',
+    'bayesian_lookup_status',
+    'bayesian_lookup_message',
+    'bayesian_catalogue',
+    'bayesian_catalogue_version',
+    'bayesian_catalogue_reference',
+    'baseline_distance_status',
+    'bayesian_distance_lower_ly',
+    'bayesian_distance_upper_ly',
+    'bayesian_quality_status',
+    'bayesian_quality_notes',
+    'distance_review_notes',
+    'distance_mode',
+    'distance_auto_threshold',
+    'parallax_fractional_uncertainty',
+    'distance_delta_absolute_magnitude',
+    'distance_brightness_factor',
+    'distance_radius_factor',
+    'distance_diagnostic_assumptions',
+    'baseline_absolute_g',
+    'baseline_g_brightness_ratio',
+    'baseline_radius_approx_solar',
+    'baseline_comparison_extinction',
+    'baseline_comparison_temperature',
+    'radius_approx_absolute_g',
+    'radius_approx_extinction_assumptions',
+    'radius_approx_notes',
+    'bc_g',
+    'bc_g_applicable',
+    'bc_g_source',
+    'bolometric_luminosity',
+    'bolometric_radius_temperature_source',
+    'physical_property_status',
+    'spectraltype_esphs',
+    'carbon_star_status',
+    'carbon_identification_source',
+    'carbon_reference',
+    'carbon_review_reason',
+    'ordinary_star_equivalent',
+    'bp_rp_temperature_approximate',
+    'calculation_version',
 )
 
 SECONDARY_DISPLAY_COLUMNS = tuple(
@@ -575,6 +710,9 @@ class GaiaAssistApp:
                         variable=self.show_temperature_details,
                         command=self.update_row_visibility).grid(row=2, column=2, sticky="e", pady=(8, 0))
 
+        from name_resolver import add_selector
+        add_selector(input_frame, self).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
         self.status_label = ttk.Label(
             self.root,
             textvariable=self.status,
@@ -593,6 +731,14 @@ class GaiaAssistApp:
         ttk.Button(controls, text="Distance Settings", command=self.open_distance_settings).pack(side="left", padx=8)
         ttk.Button(controls, text="Network Settings", command=self.open_network_settings).pack(side="left", padx=8)
         ttk.Button(controls, text="Cancel Query", command=self.cancel_query).pack(side="left")
+        database_frame = ttk.Frame(action_frame)
+        database_frame.grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        ttk.Label(database_frame, text="Database").pack(side="left", padx=(0, 8))
+        self.database_choice = tk.StringVar(value=network.service().label)
+        self.database_selector = ttk.Combobox(database_frame, textvariable=self.database_choice,
+            values=tuple(network.SERVICE_LABELS.values()), state="readonly", width=24)
+        self.database_selector.pack(side="left")
+        self.database_selector.bind("<<ComboboxSelected>>", self.select_database)
         ttk.Button(action_frame, text="Load Saved Results", command=self.load_saved_results).grid(row=2, column=1, columnspan=2, sticky="e", pady=(8, 0))
         self.sky_image_button = ttk.Button(
             action_frame,
@@ -792,6 +938,18 @@ class GaiaAssistApp:
     def open_network_settings(self):
         from temperature_ui import open_network_settings
         open_network_settings(self)
+
+    def select_database(self, event=None):
+        from dataclasses import replace
+        previous = network.settings()
+        key = next(key for key, label in network.SERVICE_LABELS.items() if label == self.database_choice.get())
+        try:
+            network.save_settings(replace(previous, catalogue_service=key))
+        except OSError as error:
+            self.database_choice.set(network.service(previous).label)
+            messagebox.showerror("Database preference could not be saved", str(error), parent=self.root)
+            return
+        self.status.set(f"Database: {network.SERVICE_LABELS[key]}. Applies to subsequent single and bulk queries.")
 
     def cancel_query(self):
         self.query_cancel.set()
@@ -1388,12 +1546,12 @@ class GaiaAssistApp:
 
         worker = threading.Thread(
             target=self.run_query_pipeline,
-            args=(source_id, release, self.temperature_options, self.query_generation, self.query_cancel, self.force_refresh.get()),
+            args=(source_id, release, self.temperature_options, self.query_generation, self.query_cancel, self.force_refresh.get(), network.settings()),
             daemon=True,
         )
         worker.start()
 
-    def run_query_pipeline(self, source_id, release, options=None, generation=None, cancel=None, force_refresh=False):
+    def run_query_pipeline(self, source_id, release, options=None, generation=None, cancel=None, force_refresh=False, network_options=None):
         generation = self.query_generation if generation is None else generation
         def send(event):
             self.query_events.put(("query", generation, event))
@@ -1402,7 +1560,7 @@ class GaiaAssistApp:
             derived = calculate_derived_data(data, options, skip_dust=True)
             send(("preview", self.build_display_data(data, derived)))
         try:
-            with network.query_context(cancel=cancel, force_refresh=force_refresh, progress=lambda msg: send(("status", msg))) as context:
+            with network.query_context(options=network_options, cancel=cancel, force_refresh=force_refresh, progress=lambda msg: send(("status", msg))) as context:
                 source_data = fetch_gaia_source_data(source_id, release, on_basic=preview)
                 preview(source_data)
                 log_missing_values(source_id, source_data)
@@ -1726,11 +1884,17 @@ class BulkQueryWindow:
             value="Paste one object per row, or load a text file."
         )
         self.selected_columns = {
-            column_name: tk.BooleanVar(value=column_name in PRIMARY_DISPLAY_ORDER)
+            column_name: tk.BooleanVar(value=column_name in DEFAULT_BULK_COLUMNS)
             for column_name in DISPLAY_COLUMNS
         }
-        self.column_order = list(DISPLAY_COLUMNS)
+        self.column_order = list(DEFAULT_BULK_COLUMNS) + [
+            key for key in DISPLAY_COLUMNS if key not in DEFAULT_BULK_COLUMNS
+        ]
         self.column_block_frames = []
+        self.category_view = False
+        from temperature_schema import BULK_CATEGORY_ORDER
+        self.category_order = list(BULK_CATEGORY_ORDER)
+        self.dragged_category = None
         self.dragged_column = None
         self.object_inputs = []
         self.input_buffer = ""
@@ -1759,6 +1923,7 @@ class BulkQueryWindow:
         self.window.destroy()
 
     def clear_window(self):
+        self.hide_column_preview()
         analysis = getattr(self, "cluster_analysis_window", None)
         if analysis is not None and analysis.window.winfo_exists():
             analysis.close()
@@ -1942,6 +2107,10 @@ class BulkQueryWindow:
             command=self.show_guide,
         ).grid(row=0, column=2, sticky="e")
 
+        self.category_button = ttk.Button(top_bar, text="View in Catagories" if not self.category_view else "View Default Selection",
+                                          command=self.toggle_category_view)
+        self.category_button.grid(row=0, column=1, padx=12, sticky="e")
+
         selection_container = ttk.Frame(frame)
         selection_container.grid(row=1, column=0, sticky="nsew", pady=(14, 10))
         selection_container.columnconfigure(0, weight=1)
@@ -1949,10 +2118,15 @@ class BulkQueryWindow:
 
         canvas = tk.Canvas(selection_container, highlightthickness=0)
         canvas.grid(row=0, column=0, sticky="nsew")
+        self.column_canvas = canvas
+        scrollbar = ttk.Scrollbar(selection_container, orient="vertical", command=canvas.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        self.bind_column_scroll(canvas)
 
         hint = ttk.Label(
             selection_container,
-            text="Check fields to include. Drag compact blocks; final order reads left to right, top to bottom.",
+            text="Scroll to see all fields. Hover for full names. Drag to reorder; use the wheel while dragging to reach other rows.",
             foreground="#555555",
         )
         hint.grid(row=1, column=0, sticky="w", pady=(8, 0))
@@ -1989,13 +2163,48 @@ class BulkQueryWindow:
         ttk.Button(
             bottom_bar,
             text="Select All",
-            command=lambda: self.set_all_columns(True),
+            command=self.toggle_all_columns,
         ).grid(row=0, column=2, sticky="e", padx=(0, 8))
         ttk.Button(
             bottom_bar,
             text="Start Bulk Query",
             command=self.start_bulk_query,
         ).grid(row=0, column=3, sticky="e")
+
+    def toggle_all_columns(self):
+        self.set_all_columns(not all(variable.get() for variable in self.selected_columns.values()))
+
+    def toggle_category_view(self):
+        self.category_view = not self.category_view
+        self.category_button.configure(text="View Default Selection" if self.category_view else "View in Catagories")
+        self.render_column_blocks()
+        self.column_canvas.yview_moveto(0)
+
+    def group_columns(self):
+        from temperature_schema import bulk_field_category
+        self.column_order = [key for category in self.category_order for key in self.column_order
+                             if bulk_field_category(key) == category]
+
+    def start_category_drag(self, _event, category):
+        self.hide_column_preview()
+        self.dragged_category = category
+        self.window.bind("<ButtonRelease-1>", self.finish_category_drag)
+
+    def finish_category_drag(self, event):
+        category = self.dragged_category
+        if category is None:
+            return
+        self.dragged_category = None
+        self.window.unbind("<ButtonRelease-1>")
+        target = len(self.category_order)
+        for name, header in self.category_headers:
+            if event.y_root < header.winfo_rooty() + header.winfo_height() / 2:
+                target = self.category_order.index(name)
+                break
+        old = self.category_order.index(category)
+        self.category_order.remove(category)
+        self.category_order.insert(target - (target > old), category)
+        self.render_column_blocks()
 
     def set_all_columns(self, is_selected):
         for variable in self.selected_columns.values():
@@ -2016,20 +2225,41 @@ class BulkQueryWindow:
         self.render_column_blocks()
 
     def render_column_blocks(self):
+        self.hide_column_preview()
         for child in self.columns_frame.winfo_children():
             child.destroy()
 
+        from temperature_schema import bulk_field_category
+        if self.category_view:
+            self.group_columns()
+        self.category_headers = []
         self.column_block_frames = []
         for column_index in range(self.COLUMN_BLOCKS_PER_ROW):
             self.columns_frame.columnconfigure(
                 column_index,
                 weight=1,
-                minsize=190,
+                minsize=0,
+                uniform="column_blocks",
             )
 
+        row_index, grid_column, previous_category = -1, 0, None
         for index, column_name in enumerate(self.column_order):
-            row_index = index // self.COLUMN_BLOCKS_PER_ROW
-            grid_column = index % self.COLUMN_BLOCKS_PER_ROW
+            category = bulk_field_category(column_name)
+            if self.category_view and category != previous_category:
+                row_index += 1
+                header = ttk.Label(self.columns_frame, text="::  " + category + "  (drag section to reorder)",
+                                   font=("Segoe UI", 11, "bold"), padding=(8, 12), cursor="hand2")
+                header.grid(row=row_index, column=0, columnspan=self.COLUMN_BLOCKS_PER_ROW, sticky="ew")
+                header.bind("<ButtonPress-1>", lambda event, name=category: self.start_category_drag(event, name))
+                header.bind("<ButtonRelease-1>", self.finish_category_drag)
+                self.bind_column_scroll(header)
+                self.category_headers.append((category, header))
+                row_index += 1
+                grid_column = 0
+            elif index == 0 or grid_column == self.COLUMN_BLOCKS_PER_ROW:
+                row_index += 1
+                grid_column = 0
+            previous_category = category
             block = tk.Frame(
                 self.columns_frame,
                 borderwidth=1,
@@ -2078,7 +2308,47 @@ class BulkQueryWindow:
                 )
                 widget.bind("<ButtonRelease-1>", self.finish_column_drag)
 
+            for widget in (block, *block.winfo_children()):
+                self.bind_column_scroll(widget)
+                widget.bind("<Enter>", lambda event, name=column_name: self.show_column_preview(event, name), add="+")
+                widget.bind("<Leave>", lambda _event: self.hide_column_preview(), add="+")
             self.column_block_frames.append((column_name, block))
+            grid_column += 1
+
+    def bind_column_scroll(self, widget):
+        for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            widget.bind(sequence, self.scroll_columns, add="+")
+
+    def scroll_columns(self, event):
+        self.hide_column_preview()
+        delta = getattr(event, "delta", 0)
+        direction = -1 if getattr(event, "num", None) == 4 or delta > 0 else 1
+        steps = max(1, int(abs(delta) / 120))
+        self.column_canvas.yview_scroll(direction * steps, "units")
+        return "break"
+
+    def hide_column_preview(self):
+        preview = getattr(self, "column_preview", None)
+        if preview is not None:
+            preview.destroy()
+            self.column_preview = None
+
+    def show_column_preview(self, event, column_name):
+        self.hide_column_preview()
+        if self.dragged_column or self.dragged_category:
+            return
+        preview = tk.Toplevel(self.window)
+        self.column_preview = preview
+        preview.withdraw()
+        preview.overrideredirect(True)
+        ttk.Label(preview, text=DISPLAY_COLUMNS[column_name], padding=8,
+                  wraplength=440, justify="left", relief="solid").pack()
+        preview.update_idletasks()
+        x = min(event.x_root + 12, preview.winfo_screenwidth() - preview.winfo_reqwidth() - 8)
+        y = min(event.widget.winfo_rooty() + event.widget.winfo_height() + 4,
+                preview.winfo_screenheight() - preview.winfo_reqheight() - 8)
+        preview.geometry(f"+{max(0, x)}+{max(0, y)}")
+        preview.deiconify()
 
     def get_compact_column_label(self, column_name):
         label = DISPLAY_COLUMNS[column_name]
@@ -2087,6 +2357,7 @@ class BulkQueryWindow:
         return f"{label[:20]}..."
 
     def start_column_drag(self, _event, column_name):
+        self.hide_column_preview()
         self.dragged_column = column_name
         self.window.bind("<ButtonRelease-1>", self.finish_column_drag)
 
@@ -2094,7 +2365,12 @@ class BulkQueryWindow:
         if not self.dragged_column:
             return
 
-        target_index = self.get_column_drop_index(event.x_root, event.y_root)
+        candidates = self.column_block_frames
+        if self.category_view:
+            from temperature_schema import bulk_field_category
+            category = bulk_field_category(self.dragged_column)
+            candidates = [(key, block) for key, block in candidates if bulk_field_category(key) == category]
+        target_index = self.get_column_drop_index(event.x_root, event.y_root, candidates)
         dragged_column = self.dragged_column
         self.dragged_column = None
         self.window.unbind("<ButtonRelease-1>")
@@ -2110,10 +2386,12 @@ class BulkQueryWindow:
         self.column_order.insert(target_index, dragged_column)
         self.render_column_blocks()
 
-    def get_column_drop_index(self, pointer_x, pointer_y):
+    def get_column_drop_index(self, pointer_x, pointer_y, candidates=None):
         rows = {}
-        for index, (_column_name, block) in enumerate(self.column_block_frames):
-            row_index = index // self.COLUMN_BLOCKS_PER_ROW
+        candidates = self.column_block_frames if candidates is None else candidates
+        for column_name, block in candidates:
+            index = self.column_order.index(column_name)
+            row_index = block.winfo_rooty()
             rows.setdefault(row_index, []).append((index, block))
 
         for row_index in sorted(rows):
@@ -2133,13 +2411,14 @@ class BulkQueryWindow:
                         return index
                 return blocks[-1][0] + 1
 
-        return len(self.column_block_frames)
+        return self.column_order.index(candidates[-1][0]) + 1 if candidates else len(self.column_order)
 
     def start_bulk_query(self):
         if self.query_in_progress:
             return
         self.cancel_event = threading.Event()
         self.force_refresh_snapshot = self.app.force_refresh.get()
+        self.network_options_snapshot = network.settings()
         self.temperature_options = self.app.temperature_options
         selected = self.get_selected_columns()
         if not selected:
@@ -2311,7 +2590,7 @@ class BulkQueryWindow:
     def run_bulk_query(self, objects, release, selected_columns):
         total = len(objects)
         processed = 0
-        options = network.settings()
+        options = getattr(self, "network_options_snapshot", None) or network.settings()
         for batch in chunk_sequence(objects, options.batch_size):
             if self.cancel_event.is_set():
                 break
@@ -2819,8 +3098,10 @@ class BulkQueryWindow:
 
 def fetch_sesame_response(common_name):
     with network.timed("name resolution"):
+        context = network.CURRENT.get()
+        options = context.options if context else network.settings()
         return network.bounded("aux", ("scientist_aux", "sesame", (common_name,)),
-            limit=network.settings().optional_timeout)
+            limit=options.optional_timeout, options=options)
 
 
 def parse_sesame_response(response_text):
@@ -2887,7 +3168,7 @@ def resolve_nearest_dr3_source_id(ra, dec):
     def launch_position_query():
         return network.tap_query(query)
 
-    service = "ESA Gaia common-name position match"
+    service = network.service().label + " common-name position match"
     results = run_with_retries(launch_position_query, service, attempts=2)
     if len(results) == 0:
         raise QueryServiceError(
@@ -2899,7 +3180,9 @@ def resolve_nearest_dr3_source_id(ra, dec):
 
 
 def resolve_common_name_to_dr3_source_id(common_name):
-    service = "CDS Sesame name resolver"
+    context = network.CURRENT.get()
+    from name_resolver import LABELS
+    service = LABELS[(context.options if context else network.settings()).resolver_service] + " name resolver"
     response_text = run_with_retries(
         lambda: fetch_sesame_response(common_name),
         service,
@@ -2964,7 +3247,7 @@ def resolve_dr3_source_id(source_id, release):
     def launch_crossmatch_query():
         return network.tap_query(query)
 
-    service = f"ESA Gaia {release}-to-DR3 crossmatch"
+    service = f"{network.service().label} {release}-to-DR3 crossmatch"
     results = run_with_retries(launch_crossmatch_query, service, attempts=2)
     if len(results) == 0:
         raise QueryServiceError(
@@ -3146,9 +3429,10 @@ def format_object_type_probability(row):
 
 def log_missing_values(source_id, source_data):
     missing_labels = [
-        GAIA_COLUMNS[column_name]
+        ALL_DISPLAY_COLUMNS.get(column_name, column_name)
         for column_name, value in source_data.items()
         if value is None
+        and not column_name.endswith(("_message", "_retrieved_utc"))
     ]
 
     timestamp = datetime.now().isoformat(timespec="seconds")
@@ -3157,10 +3441,14 @@ def log_missing_values(source_id, source_data):
     else:
         missing_text = "None"
 
-    with MISSING_VALUES_LOG.open("a", encoding="utf-8") as log_file:
-        log_file.write(
-            f"{timestamp} | source_id={source_id} | missing_values={missing_text}\n"
-        )
+    try:
+        with MISSING_VALUES_LOG.open("a", encoding="utf-8") as log_file:
+            log_file.write(
+                f"{timestamp} | source_id={source_id} | missing_values={missing_text}\n"
+            )
+    except OSError as error:
+        # Diagnostic output must not discard otherwise usable measurements.
+        LOGGER.warning("Could not write missing-values log for %s: %s", source_id, error)
 
 
 def collect_pipeline_warnings(source_data, derived_data):
@@ -3248,6 +3536,18 @@ def calculate_derived_data(source_data, options=None, *, skip_dust=False):
                      if skip_dust else calculate_dust_extinction(source_data, distance_data))
         dust_data.update(extinction_source="NADC dust map (fixed coefficients)" if dust_data["ebv"] is not None else "unavailable",
                          extinction_status="uncertain (map errors unavailable)" if dust_data["ebv"] is not None else "unavailable")
+    # G-band extinction can be available independently of colour reddening.
+    selected_ag = number(dust_data.get("mean_g_band_extinction"))
+    if selected_ag is None or selected_ag < 0:
+        if ag is not None and ag >= 0:
+            dust_data["mean_g_band_extinction"] = ag
+            dust_data["g_extinction_source"] = "Gaia GSP-Phot A_G"
+        elif reddening is not None and reddening >= 0 and not skip_dust:
+            map_dust = calculate_dust_extinction(source_data, distance_data)
+            map_ag = number(map_dust.get("mean_g_band_extinction"))
+            if map_ag is not None and map_ag >= 0:
+                dust_data["mean_g_band_extinction"] = map_ag
+                dust_data["g_extinction_source"] = "NADC dust map (fixed coefficients)"
     derived_data.update(dust_data)
     new_bp_rp_data = calculate_new_bp_rp(source_data, dust_data)
     derived_data.update(new_bp_rp_data)
@@ -3292,7 +3592,12 @@ def calculate_derived_data(source_data, options=None, *, skip_dust=False):
         )
     )
     if derived_data["star_type"] is None or derived_data["star_type"] == "N/A":
-        derived_data["classification_status"] = "unclassified"
+        temperature_only_type = estimate_temperature_only_type(source_data, temperature_data)
+        if temperature_only_type:
+            derived_data["star_type"] = temperature_only_type
+            derived_data["classification_status"] = "approximate temperature-only estimate; luminosity class unresolved, not spectroscopic"
+        else:
+            derived_data["classification_status"] = "unclassified"
     elif temperature_data["bp_rp_temperature_approximate"] and temperature_data["adopted_temperature_source"] == "BP-RP":
         derived_data["classification_status"] = "approximate; tentative, not a secure subtype census"
     elif temperature_data["temperature_status"] in ("needs_review", "conditional") or not cmd_reliable:
@@ -3518,6 +3823,27 @@ def calculate_star_type(source_data, temperature_data, visual_magnitude_data):
 
     return {"star_type": None}
 
+
+def estimate_temperature_only_type(source_data, temperature_data):
+    """Retain a rough temperature family when a full HR classification is unavailable.
+
+    Never infer luminosity, a WR spectrum, or a confirmed brown dwarf from T alone.
+    Explorer comparisons continue to use their original HR classification.
+    """
+    if str(source_data.get("object_type") or "").lower().startswith(("quasar", "galaxy")):
+        return None
+    temperature = number(temperature_data.get("effective_temperature"))
+    if temperature is None or temperature <= 0:
+        return None
+    families = list(dict.fromkeys(
+        rule["subclass"][0]
+        for rule in find_spectral_rules(temperature)
+        if rule["subclass"][0] in "OBAFGKMLTY"
+    ))
+    if not families:
+        return "Hot star (temperature only)" if temperature >= 50000 else None
+    return "/".join(families) + "-like (temperature only)"
+
 def calculate_error_check(source_data):
     ra_error = source_data["ra_error"]
     dec_error = source_data["dec_error"]
@@ -3726,25 +4052,23 @@ def fetch_dust_ebv(galactic_l, galactic_b, distance_kpc):
 
 
 def calculate_absolute_magnitude(source_data, distance_data, dust_data):
-    mean_g = source_data["phot_g_mean_mag"]
-    distance_parsecs = distance_data.get("adopted_distance_pc", distance_data.get("distance_parsecs"))
-    mean_g_band_extinction = dust_data["mean_g_band_extinction"]
-
-    if (
-        mean_g is None
-        or distance_parsecs is None
-        or distance_parsecs <= 0
-        or mean_g_band_extinction is None
-    ):
-        return {"absolute_magnitude": None}
-
-    absolute_magnitude = (
-        mean_g
-        - 5 * log10(distance_parsecs)
-        + 5
-        - mean_g_band_extinction
-    )
-    return {"absolute_magnitude": round(absolute_magnitude, 6)}
+    mean_g = number(source_data.get("phot_g_mean_mag"))
+    distance_parsecs = number(distance_data.get("adopted_distance_pc", distance_data.get("distance_parsecs")))
+    extinction = number(dust_data.get("mean_g_band_extinction"))
+    corrected = extinction is not None and extinction >= 0
+    g_used = mean_g - extinction if mean_g is not None and corrected else mean_g
+    if mean_g is None:
+        status = "Unavailable: finite Mean G required"
+    elif corrected:
+        source = dust_data.get("g_extinction_source", dust_data.get("extinction_source", "selected extinction"))
+        status = f"Extinction-corrected using {source}; A_G = {extinction:g} mag"
+    else:
+        status = "Not de-dusted: observed Mean G used directly; G-band extinction unavailable, not assumed zero"
+    absolute = None
+    if g_used is not None and distance_parsecs is not None and distance_parsecs > 0:
+        absolute = round(g_used - 5 * log10(distance_parsecs) + 5, 6)
+    return {"absolute_magnitude": absolute, "g_magnitude_used": g_used,
+            "g_magnitude_status": status}
 
 
 def calculate_luminosity(absolute_magnitude_data):
@@ -4009,10 +4333,8 @@ def _clean_value(value):
 
 
 def main():
-    load_desktop_gui()
-    root = tk.Tk()
-    GaiaAssistApp(root)
-    root.mainloop()
+    from app_launcher import run_desktop
+    run_desktop(initial_mode="Scientist")
 
 
 if __name__ == "__main__":

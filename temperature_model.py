@@ -7,7 +7,20 @@ from dataclasses import dataclass
 import math
 import random
 
-VERSION = "temperature-comparison-2.5"
+VERSION = "temperature-comparison-2.6.1"
+NO_TEMPERATURE_CONCERNS = "None identified by application screens"
+
+# Gaia DR3 online documentation, section 11.2.3, Table 11.13 (kelvin).
+# https://gea.esac.esa.int/archive/documentation/GDR3/Data_analysis/chap_cu8par/sec_cu8par_data/ssec_cu8par_data_xp.html
+GSP_LIBRARY_LIMITS_K = {
+    "MARCS": (2800, 8000),
+    "PHOENIX": (3000, 10000),
+    "A": (6000, 15000),
+    "OB": (15000, 55000),
+}
+# Application tolerances for an interpolated posterior, not grid steps or errors.
+GSP_EDGE_TOLERANCE_K = 1.0
+GSP_COMPRESSED_INTERVAL_K = 2.0
 
 
 def number(value):
@@ -25,6 +38,59 @@ def bounds(value, low, high):
     if None in (value, low, high) or not low <= value <= high:
         return None
     return value - low, high - value
+
+
+def gsp_model_boundary(source):
+    """Screen the catalogue median against the library actually used in DR3."""
+    name = source.get("libname_gspphot")
+    library = name.strip().upper() if isinstance(name, str) else None
+    result = {
+        "gsp_model_library": library or None,
+        "gsp_model_boundary_status": "not_evaluated",
+        "gsp_model_boundary_distance_k": None,
+        "gsp_model_boundary_warning": None,
+    }
+    temperature = number(source.get("teff_gspphot"))
+    if library not in GSP_LIBRARY_LIMITS_K or temperature is None or temperature <= 0:
+        return result
+    minimum, maximum = GSP_LIBRARY_LIMITS_K[library]
+    if not minimum <= temperature <= maximum:
+        result["gsp_model_boundary_warning"] = (
+            f"GSP-Phot median outside the documented {library} range "
+            f"({minimum}–{maximum} K). Boundary constraint could not be evaluated."
+        )
+        return result
+
+    lower_edge = temperature - minimum <= maximum - temperature
+    edge = minimum if lower_edge else maximum
+    distance = abs(edge - temperature)
+    result["gsp_model_boundary_distance_k"] = distance
+    result["gsp_model_boundary_status"] = "not_flagged"
+    if distance > GSP_EDGE_TOLERANCE_K:
+        return result
+
+    result["gsp_model_boundary_status"] = "possible_boundary_constraint"
+    evidence = ""
+    low = number(source.get("teff_gspphot_lower"))
+    high = number(source.get("teff_gspphot_upper"))
+    if low is not None and high is not None and minimum <= low <= temperature <= high <= maximum:
+        if (low if lower_edge else high) == edge:
+            evidence = " The reported 16th–84th percentile interval reaches this boundary."
+        elif max(abs(edge - low), abs(edge - high)) <= GSP_COMPRESSED_INTERVAL_K:
+            evidence = f" Both reported percentiles lie within {GSP_COMPRESSED_INTERVAL_K:g} K of this boundary."
+        if evidence:
+            result["gsp_model_boundary_status"] = "strong_boundary_concern"
+
+    side = "lower" if lower_edge else "upper"
+    if (library, side) in {("MARCS", "lower"), ("A", "upper")}:
+        evidence += " The DR3 GSP-Phot methods paper reports wider coverage at this end than Gaia Table 11.13."
+    result["gsp_model_boundary_warning"] = (
+        f"The GSP-Phot median ({temperature} K) is {distance:.4g} K from the documented "
+        f"{library} {side} temperature boundary "
+        f"({edge} K).{evidence} Review the fit for a possible grid constraint. "
+        "This does not establish that the temperature is incorrect."
+    )
+    return result
 
 
 @dataclass(frozen=True)
@@ -231,7 +297,7 @@ def select_adopted_temperature(gaia, colour, *, shared_concerns=(), options=None
     issues += chosen.get("concerns", [])
     return {"effective_temperature": chosen.get("temperature") if source else None,
             "adopted_temperature_source": source, "temperature_selection_reason": reason,
-            "temperature_status": status, "temperature_concerns": "; ".join(dict.fromkeys(issues)) or "None identified by application screens",
+            "temperature_status": status, "temperature_concerns": "; ".join(dict.fromkeys(issues)) or NO_TEMPERATURE_CONCERNS,
             "temperature_override_reason": options.override_reason if options.override != "auto" else None}
 
 

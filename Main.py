@@ -557,6 +557,9 @@ class GaiaAssistApp:
             command=self.update_row_visibility,
         ).grid(row=2, column=1, sticky="w", padx=(145, 0), pady=(8, 0))
 
+        from name_resolver import add_selector
+        add_selector(input_frame, self).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
         self.status_label = ttk.Label(
             self.root,
             textvariable=self.status,
@@ -2577,6 +2580,13 @@ class BulkQueryWindow:
 
 
 def fetch_sesame_response(common_name):
+    import name_resolver
+    if name_resolver.selected_service() == "harvard":
+        def get(url, **kwargs):
+            response = requests.get(url, timeout=20, headers={"User-Agent": "GaiaAssist/1.0"}, **kwargs)
+            response.raise_for_status()
+            return response
+        return name_resolver.fetch(common_name, get, "harvard")
     encoded_name = requests.utils.quote(common_name.strip(), safe="")
     errors = []
 
@@ -3879,30 +3889,8 @@ def _clean_value(value):
 
 
 def main():
-    from app_launcher import choose_startup_mode
-    import importlib
-
-    load_desktop_gui()
-    root = tk.Tk()
-    while True:
-        mode = choose_startup_mode(root)
-        if mode is None:
-            root.destroy()
-            return
-        if mode == "Explorer":
-            application_type = GaiaAssistApp
-            break
-        try:
-            scientist = importlib.import_module("Main_temperature")
-            scientist.load_desktop_gui()
-            application_type = scientist.GaiaAssistApp
-            break
-        except Exception as error:
-            LOGGER.exception("Scientist mode could not be loaded")
-            messagebox.showerror("Scientist could not be opened", str(error), parent=root)
-    application_type(root)
-    root.title(f"Gaia Assist — {mode}")
-    root.mainloop()
+    from app_launcher import run_desktop
+    run_desktop(initial_mode=None)
 
 
 if __name__ == "__main__":

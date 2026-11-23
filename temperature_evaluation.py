@@ -3,7 +3,7 @@ from dataclasses import asdict
 from temperature_carbon import normalized_tag
 
 from temperature_model import (
-    VERSION, TemperatureOptions, bounds, number, casagrande_estimate,
+    NO_TEMPERATURE_CONCERNS, VERSION, TemperatureOptions, bounds, number, casagrande_estimate, gsp_model_boundary,
     casagrande_in_domain, casagrande_value, red_dwarf_screen, select_adopted_temperature,
 )
 from temperature_reference import (
@@ -262,7 +262,16 @@ def evaluate_temperatures(source, context, options=None):
     if context.get("extinction_source") == "Gaia GSP-Phot" or (h_usable and not assumed_h):
         correlation += "; fitted Gaia reddening/gravity shared; covariance unavailable"
     hs = candidates["Gaia ESP-HS"]
-    return {**selection,
+    # Apply R1 only after the final adoption (including overrides and fallback).
+    boundary = gsp_model_boundary(source)
+    if boundary["gsp_model_boundary_status"] in ("possible_boundary_constraint", "strong_boundary_concern"):
+        notes = selection["temperature_concerns"]
+        selection["temperature_concerns"] = boundary["gsp_model_boundary_warning"]
+        if notes != NO_TEMPERATURE_CONCERNS:
+            selection["temperature_concerns"] += " " + notes
+        if selection["adopted_temperature_source"] == "Gaia GSP-Phot":
+            selection["temperature_status"] = "needs_review"
+    return {**selection, **boundary,
         "gaia_temperature": gaia["temperature"] if gaia["eligible"] else None, "gaia_temperature_source": gaia["source"] if gaia["eligible"] else None,
         "esphs_status": "needs_review" if hs["eligible"] and hs["review"] else "conditional" if hs["eligible"] else "unavailable",
         "esphs_notes": "; ".join(hs["concerns"]),

@@ -1,5 +1,6 @@
 """Scientist fields and display formatting; stored measurements remain unrounded."""
 from math import isfinite
+from temperature_model import GSP_EDGE_TOLERANCE_K, GSP_COMPRESSED_INTERVAL_K
 from temperature_comparison import COMPARISON_FIELDS, RADIUS_EXPLANATION
 from scientist_distance import RAW_FIELDS as DISTANCE_RAW_FIELDS, DERIVED_FIELDS as DISTANCE_FIELDS, DETAIL_FIELDS as DISTANCE_DETAILS
 AP_FIELDS = tuple(
@@ -32,6 +33,12 @@ GAIA_FIELDS.update(dict(zip(PHOTOMETRY_FIELDS, (
 GAIA_FIELDS.update(libname_gspphot="Gaia Atmosphere Library", logposterior_gspphot="Gaia Log Posterior", mcmcaccept_gspphot="Gaia MCMC Acceptance")
 GAIA_FIELDS.update(teff_esphs="Gaia ESP-HS Temperature", teff_esphs_uncertainty="Gaia ESP-HS Formal Uncertainty", flags_esphs="Gaia ESP-HS Flags", spectraltype_esphs="Gaia ESP-ELS Spectral Tag")
 GAIA_FIELDS.update(gaia_ap_status="Gaia Parameter Query Status", gaia_ap_message="Gaia Parameter Query Details")
+GAIA_FIELDS.update(gaia_catalogue_service="Gaia database", gaia_catalogue_endpoint="Gaia catalogue endpoint",
+                   gaia_catalogue_release="Gaia catalogue release", gaia_catalogue_retrieved_utc="Gaia catalogue retrieved (UTC)")
+EXPLANATIONS.update(gaia_catalogue_service="Database selected for this query. Switching databases uses a separate raw-data cache and does not reclassify cluster membership.",
+                    gaia_catalogue_endpoint="TAP endpoint used for these Gaia catalogue inputs.",
+                    gaia_catalogue_release="The source data release; all current calculations use Gaia DR3.",
+                    gaia_catalogue_retrieved_utc="Original catalogue retrieval time in UTC, retained when raw inputs are reused from cache.")
 UNITS.update(teff_esphs="K", teff_esphs_uncertainty="K")
 UNITS.update(phot_bp_mean_mag="mag", phot_rp_mean_mag="mag", parallax_error="mas")
 DERIVED_FIELDS = {
@@ -91,6 +98,27 @@ DERIVED_FIELDS = {
     "legacy_radius": "Legacy Radius (Not Bolometric)",
     "legacy_star_type": "Legacy Estimated Classification",
 }
+GSP_BOUNDARY_FIELDS = {
+    "gsp_model_library": "GSP-Phot library checked",
+    "gsp_model_boundary_status": "GSP-Phot grid boundary status",
+    "gsp_model_boundary_distance_k": "Distance to nearest GSP-Phot temperature boundary",
+    "gsp_model_boundary_warning": "GSP-Phot grid boundary notes",
+}
+DERIVED_FIELDS.update(GSP_BOUNDARY_FIELDS)
+UNITS["gsp_model_boundary_distance_k"] = "K"
+EXPLANATIONS.update(
+    gsp_model_library="The atmosphere library Gaia selected for this GSP-Phot fit, as recorded in libname_gspphot.",
+    gsp_model_boundary_status=(
+        f"The median triggers review within {GSP_EDGE_TOLERANCE_K:g} K of a documented library limit. "
+        f"A stronger concern means the reported 16th–84th percentile interval reaches the same limit "
+        f"or lies entirely within {GSP_COMPRESSED_INTERVAL_K:g} K of it. These provisional thresholds screen for a possible grid constraint."
+    ),
+    gsp_model_boundary_distance_k=(
+        "Temperature difference in kelvin between the GSP-Phot median and the nearer documented limit "
+        "of its selected library. An empty value means the check could not evaluate this fit."
+    ),
+    gsp_model_boundary_warning="Identifies the library limit and the evidence for reviewing the GSP-Phot fit. A boundary flag alone cannot establish a temperature error.",
+)
 DERIVED_FIELDS.update(COMPARISON_FIELDS)
 DERIVED_FIELDS.update(DISTANCE_RAW_FIELDS)
 DERIVED_FIELDS.update(DISTANCE_FIELDS)
@@ -109,15 +137,24 @@ EXPLANATIONS.update({
     "luminosity": "G-band solar brightness ratio: 10**(0.4*(4.67-MG)). A passband quantity, not total bolometric luminosity; it must not be used to infer a bolometric radius.",
     "radius": "Stefan–Boltzmann radius from corrected absolute G plus an explicitly applicable, sourced BC_G = Mbol - MG (solar Mbol 4.74, temperature 5772 K). Unavailable when valid inputs or a vetted correction are absent.",
     "radius_approx_solar": RADIUS_EXPLANATION,
-    "star_type": "Estimated classification using the adopted temperature and estimated Johnson V absolute magnitude. Review its status; this is not spectroscopic classification or evidence of cluster membership.",
+    "star_type": "Estimated classification using the adopted temperature and estimated Johnson V absolute magnitude. When a full classification is unavailable, a labelled approximate temperature-only family may be shown without a luminosity class. Review its status; this is not spectroscopic classification or evidence of cluster membership.",
     "red_dwarf_candidate": "Heuristic: intrinsic BP-RP > 1.8 and estimated Mv > 8.69. A failed screen does not rule out a dwarf; an equal-flux binary is about 0.753 mag brighter. Uncertain distance/extinction/V transformation makes the screen uncertain.",
     "bp_rp_excess_correctness": "Riello C* evaluated on observed BP-RP, with a G-magnitude-dependent tolerance. Missing inputs are unassessed. This is a photometry screen, not membership evidence.",
     "metallicity": "Raw Gaia GSP-Phot M/H retained for inspection. It is not automatically treated as vetted Fe/H by the temperature calibration.",
 })
+DERIVED_FIELDS.update({
+    "g_magnitude_used": "G magnitude used",
+    "g_magnitude_status": "G magnitude correction status",
+})
+UNITS["g_magnitude_used"] = "mag"
+EXPLANATIONS["g_magnitude_used"] = "Mean G minus the available G-band extinction. If neither Gaia nor NADC supplies valid G-band extinction, observed Mean G is used directly and is not de-dusted. A valid distance is still required for absolute magnitude."
+EXPLANATIONS["g_magnitude_status"] = "States whether the G magnitude used for derived properties was corrected for extinction or is the observed, not de-dusted measurement. Unknown extinction is not zero extinction."
+EXPLANATIONS["absolute_magnitude"] = "G-band absolute magnitude using the adopted distance and available extinction correction. When extinction is unavailable, uses observed Mean G; check G magnitude correction status."
 for key, label in {**GAIA_FIELDS, **DERIVED_FIELDS}.items():
     EXPLANATIONS.setdefault(key, label + ". Read with the recorded method, assumptions and review notes. Missing information remains unavailable; formal errors do not include every systematic effect.")
 
 TEMPERATURE_DISPLAY_ORDER = (
+    "g_magnitude_used", "g_magnitude_status",
     "effective_temperature", "adopted_temperature_source", "temperature_status",
     "temperature_selection_reason", "temperature_concerns",
     "radius_approx_solar", "radius", "physical_property_status",
@@ -130,6 +167,7 @@ TEMPERATURE_DISPLAY_ORDER = (
 )
 
 TEMPERATURE_DETAIL_FIELDS = frozenset({
+    *GSP_BOUNDARY_FIELDS,
     "scientific_bp_rp_temperature", "scientific_bp_rp_status", "scientific_bp_rp_notes",
     "fallback_colour", "fallback_colour_source",
     *AP_FIELDS, "bp_rp_temperature_error", "bp_rp_temperature_lower", "bp_rp_temperature_upper",
@@ -141,6 +179,7 @@ TEMPERATURE_DETAIL_FIELDS = frozenset({
     "casagrande_status", "cool_dwarf_temperature", "cool_dwarf_notes",
 })
 TEMPERATURE_DETAIL_FIELDS = TEMPERATURE_DETAIL_FIELDS | frozenset(DISTANCE_DETAILS) | frozenset({
+    "gaia_catalogue_endpoint", "gaia_catalogue_release", "gaia_catalogue_retrieved_utc",
     "distance_parsecs", "distance_lightyears",
     "carbon_identification_source", "carbon_reference", "carbon_review_reason",
     "radius_approx_absolute_g", "bc_g", "bc_g_applicable", "bc_g_source",
@@ -166,6 +205,8 @@ def format_display_value(key, value):
         try:
             numeric = float(value)
             if isfinite(numeric):
+                if key == "gsp_model_boundary_distance_k":
+                    return f"{numeric:.6g}"
                 return f"{numeric:.0f}"
         except (TypeError, ValueError):
             pass
@@ -187,3 +228,39 @@ EXPLANATIONS.update({
     "distance_parsecs": "Compatibility distance field for saved records. Fresh Scientist calculations use the explicit adopted distance; older loaded values retain their original method and are not relabelled Bayesian.",
     "distance_lightyears": "Saved-record compatibility distance in light-years. Fresh calculations alias the explicit adopted distance, using the original conversion of 3.26156 light-years per parsec.",
 })
+
+
+BULK_CATEGORY_ORDER = (
+    "Identity and classification", "Coordinates", "Motion and velocity", "Distance and parallax",
+    "Brightness and magnitudes", "Colour and temperature", "Extinction and reddening",
+    "Radius", "Quality indicators", "Composition and gravity", "Calculation and catalogue notes",
+)
+
+
+def bulk_field_category(key):
+    """Assign a stable subject to each field; provenance stays with its subject."""
+    if key in GSP_BOUNDARY_FIELDS:
+        return "Colour and temperature"
+    if key.startswith(("distance_", "bayesian_", "baseline_distance", "parallax")):
+        return "Distance and parallax"
+    if key in ("ra", "dec", "l", "b", "constellation") or key.startswith(("ra_", "dec_")):
+        return "Coordinates"
+    if key.startswith(("pmra", "pmdec", "radial_velocity")):
+        return "Motion and velocity"
+    if "radius" in key or key == "physical_property_status":
+        return "Radius"
+    if any(word in key for word in ("excess", "ruwe", "flux_over_error")) or key in ("photometry_status", "flags_esphs", "logposterior_gspphot", "mcmcaccept_gspphot"):
+        return "Quality indicators"
+    if any(word in key for word in ("extinction", "reddening", "ebpminrp")) or key == "ebv" or key.startswith("ag_gspphot"):
+        return "Extinction and reddening"
+    if any(word in key for word in ("metallicity", "gravity")) or key.startswith(("mh_gspphot", "logg_gspphot")):
+        return "Composition and gravity"
+    if any(word in key for word in ("magnitude", "luminosity", "brightness")) or key.startswith(("phot_", "bc_g")) or key in ("baseline_absolute_g",):
+        return "Brightness and magnitudes"
+    if key in ("source_id", "object_type", "star_type", "ordinary_star_equivalent", "red_dwarf_candidate", "population_hypothesis", "spectraltype_esphs", "legacy_star_type") or "classification" in key or key.startswith("carbon_"):
+        return "Identity and classification"
+    if key == "temperature_options" or key == "calculation_version":
+        return "Calculation and catalogue notes"
+    if any(word in key for word in ("temperature", "teff", "bp_rp", "colour", "wavelength", "casagrande", "cool_dwarf", "esphs_")):
+        return "Colour and temperature"
+    return "Calculation and catalogue notes"

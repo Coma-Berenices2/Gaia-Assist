@@ -48,6 +48,21 @@ The app uses explicit application screens, not calibrated reliability probabilit
 
 GSP-Phot has model/extinction/systematic limitations even with narrow catalogue bounds; see [Gaia's validation discussion](https://gea.esac.esa.int/archive/documentation/GDR3/Data_analysis/chap_cu8par/sec_cu8par_apsis/ssec_cu8par_apsis_gspphot.html). The inherited HR classification rules remain estimates. The approximate cool-dwarf route must not be used alone for a secure M-subtype census. External benchmark validation is still needed before making scientific accuracy claims.
 
+## Reviewing a GSP-Phot temperature at a library boundary
+
+Scientist checks the catalogue median (`teff_gspphot`) against the library named by `libname_gspphot`. The reference limits in kelvin are MARCS 2800–8000, PHOENIX 3000–10000, A 6000–15000 and OB 15000–55000. These are the published synthetic-library limits in the online DR3 documentation. The GSP-Phot methods paper gives wider coverage at the MARCS lower and A upper ends, so an alert at either of those limits warrants particular caution. [Gaia DR3 Table 11.13](https://gea.esac.esa.int/archive/documentation/GDR3/Data_analysis/chap_cu8par/sec_cu8par_data/ssec_cu8par_data_xp.html) · [Andrae et al., section 2.6](https://arxiv.org/abs/2206.06138)
+
+GSP-Phot interpolates between grid points and reports temperature percentiles. The spacing varies even within a library and can be as fine as 25 K for MARCS. Scientist uses provisional 1 K and 2 K tolerances, both well inside even that fine grid step, to focus on fits unusually close to an edge. These thresholds have no calibrated error probability. A stellar temperature can genuinely lie at a library limit, and a narrow fitted interval alone cannot establish physical accuracy. [Gaia DR3 GSP-Phot method and outputs](https://gea.esac.esa.int/archive/documentation/GDR3/Data_analysis/chap_cu8par/sec_cu8par_apsis/ssec_cu8par_apsis_gspphot.html) · [Creevey et al., section 4.1 and Table 2](https://doi.org/10.1051/0004-6361/202243688)
+
+| Status | How to read it |
+| --- | --- |
+| `not_flagged` | The median lies inside the selected library range, more than 1 K from either limit. |
+| `possible_boundary_constraint` | The median lies inside the range, within 1 K of a limit (inclusive). Missing or unusable percentiles still allow this warning. |
+| `strong_boundary_concern` | The median meets the 1 K rule and the reported 16th–84th percentile interval either reaches the same limit exactly or lies entirely within 2 K of it. Both percentiles must be finite, bracket the median and be inside the reference range. |
+| `not_evaluated` | The library is missing or unknown, or the median is missing, invalid or outside the reference range. The distance to the boundary is left empty. |
+
+**Temperature Review Notes** identifies the flagged library, boundary and offset. **Calculation Details** and saved results also give the library, status, offset in kelvin and warning as separate fields. Scientist applies this check after selecting a temperature. If it adopted GSP-Phot, a flag sets its status to `needs_review`. If it adopted another method, the warning refers specifically to the GSP-Phot fit.
+
 ## Verification and illustrative output
 
 Version 2.1 added input-driven eligibility, the blue-colour composition screen, optional ESP-HS and expandable details, following the supplied September 21 instructions. Version 2.2 adds the subsequently requested Explorer compatibility fallback. The regression suite includes 88 tests covering the original features, launcher, Scientist pipeline and all Explorer formula branches. Explorer's `Main.py` is unchanged by this update.

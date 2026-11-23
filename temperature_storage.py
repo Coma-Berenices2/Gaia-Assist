@@ -6,10 +6,11 @@ from pathlib import Path
 from temperature_model import VERSION, number
 from temperature_carbon import CARBON_FIELDS
 from temperature_comparison import COMPARISON_FIELDS
+from temperature_schema import GSP_BOUNDARY_FIELDS
 from scientist_distance import RAW_FIELDS as DISTANCE_RAW_FIELDS, DERIVED_FIELDS as DISTANCE_FIELDS
 
-REQUIRED_EXPORT_FIELDS = (*DISTANCE_RAW_FIELDS, *DISTANCE_FIELDS, *COMPARISON_FIELDS, "radius", "physical_property_status", *CARBON_FIELDS, "calculation_version", "effective_temperature",
-    "adopted_temperature_source", "temperature_status", "temperature_concerns", "classification_status")
+REQUIRED_EXPORT_FIELDS = ("gaia_catalogue_service", "gaia_catalogue_endpoint", "gaia_catalogue_release", "gaia_catalogue_retrieved_utc", "g_magnitude_used", "g_magnitude_status",*DISTANCE_RAW_FIELDS, *DISTANCE_FIELDS, *COMPARISON_FIELDS, "radius", "physical_property_status", *CARBON_FIELDS, "calculation_version", "effective_temperature",
+    "adopted_temperature_source", "temperature_status", "temperature_concerns", "classification_status", *GSP_BOUNDARY_FIELDS)
 
 
 def save_csv(path, records, columns):

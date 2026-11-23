@@ -40,7 +40,7 @@ def calculate_local_comparisons(source, derived, methods):
     out = dict.fromkeys(COMPARISON_FIELDS)
     ag = number(derived.get("mean_g_band_extinction"))
     mg = number(derived.get("absolute_magnitude"))
-    extinction_source = derived.get("extinction_source")
+    extinction_source = derived.get("g_extinction_source", derived.get("extinction_source"))
     extinction_status = derived.get("extinction_status")
     if ag is None:
         # Gaia may supply A_G even when its colour reddening is absent.

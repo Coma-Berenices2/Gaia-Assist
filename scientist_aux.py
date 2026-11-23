@@ -25,6 +25,7 @@ def dust(l, b, distance, *, network_options, emit):
 
 def sesame(name, *, network_options, emit):
     deadline = time.monotonic()+network_options.optional_timeout
-    url = "https://cds.unistra.fr/cgi-bin/nph-sesame/-oxpI/SNV?"+requests.utils.quote(name.strip(), safe="")
+    from name_resolver import fetch
     with requests.Session() as session:
-        return request(session, "GET", url, network_options, deadline, emit).text
+        return fetch(name, lambda url, **kwargs: request(session, "GET", url, network_options, deadline, emit, **kwargs),
+                     network_options.resolver_service)

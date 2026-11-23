@@ -2,10 +2,12 @@
 from contextlib import contextmanager, closing
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 import atexit
 import hashlib
 import json
 import logging
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +16,7 @@ import sqlite3
 import threading
 import time
 from urllib.parse import urljoin, urlparse
+from scientist_services import SERVICES, SERVICE_LABELS, parse_votable, prepare_query
 
 import requests
 
@@ -21,7 +24,7 @@ LOGGER = logging.getLogger("gaia_assist_temperature")
 BASE = "https://gea.esac.esa.int/tap-server/tap"
 CONFIG = Path(__file__).with_name("scientist_network_settings.json")
 CACHE_FILE = Path(__file__).with_name("scientist_cache.sqlite3")
-SCHEMA = "scientist-raw-3"
+SCHEMA = "scientist-raw-4"
 _slots = threading.BoundedSemaphore(3)
 _locks = [threading.Lock() for _ in range(64)]
 _state_lock = threading.Lock()
@@ -75,8 +78,14 @@ class NetworkOptions:
     sync_limit: int = 20
     attempts: int = 2
     poll_interval: float = .75
+    catalogue_service: str = "esa"
+    resolver_service: str = "france"
 
     def __post_init__(self):
+        from name_resolver import validate
+        validate(self.resolver_service)
+        if self.catalogue_service not in SERVICES:
+            raise ValueError("Choose a known Gaia database: " + ", ".join(SERVICE_LABELS.values()))
         for key in ("request_timeout", "overall_timeout", "optional_timeout", "cache_ttl", "poll_interval"):
             value = getattr(self, key)
             if not isinstance(value, (int, float)) or not 0 < value < 1e9:
@@ -96,6 +105,12 @@ def settings():
 
 def save_settings(options):
     CONFIG.write_text(json.dumps(asdict(options), indent=2), encoding="utf-8")
+
+
+def service(options=None):
+    context = CURRENT.get()
+    options = options or (context.options if context else settings())
+    return SERVICES[options.catalogue_service]
 
 
 @dataclass
@@ -149,7 +164,12 @@ def timed(stage):
 
 
 def cache_key(kind, inputs):
-    return json.dumps([SCHEMA, kind, inputs], sort_keys=True, separators=(",", ":"))
+    selected = service()
+    if kind == "resolution":
+        context = CURRENT.get()
+        options = context.options if context else settings()
+        inputs = [options.resolver_service, inputs]
+    return json.dumps([SCHEMA, selected.key, selected.endpoint, kind, inputs], sort_keys=True, separators=(",", ":"))
 
 
 def cache_get(key, *, force=False, options=None):
@@ -207,9 +227,9 @@ def transient(error):
     return False
 
 
-def request(session, method, url, options, deadline, emit, **kwargs):
+def request(session, method, url, options, deadline, emit, *, retryable=False, **kwargs):
     """Retry idempotent requests only; never resubmit an ambiguous job POST."""
-    attempts = options.attempts if method == "GET" else 1
+    attempts = options.attempts if method == "GET" or retryable else 1
     for attempt in range(attempts):
         left = deadline-time.monotonic()
         if left <= 0:
@@ -243,32 +263,43 @@ def parse_rows(response):
     if not isinstance(payload, dict) or "metadata" not in payload or "data" not in payload:
         raise NetworkFailure("Gaia returned an invalid result document")
     names = [column["name"].lower() for column in payload["metadata"]]
+    if len(names) != len(set(names)) or any(len(values) != len(names) for values in payload["data"]):
+        raise NetworkFailure("Gaia returned duplicate columns or mismatched row lengths")
     rows = [dict(zip(names, values)) for values in payload["data"]]
     for row in rows:
         for key in ("source_id", "ap_source_id", "dr3_source_id"):
             if row.get(key) is not None:
-                if isinstance(row[key], (float, bool)):
+                if isinstance(row[key], (float, bool)) or not str(row[key]).isascii() or not str(row[key]).isdigit():
                     raise NetworkFailure("Gaia source identifier was not an exact integer/string")
                 row[key] = str(row[key])
+        for key, value in row.items():
+            if isinstance(value, float) and not math.isfinite(value):
+                row[key] = None
     return rows
 
 
-def tap_core(query, mode, options, deadline, emit):
+def tap_core(query, mode, options, deadline, emit, *, endpoint=None, maxrec=10000):
+    endpoint = endpoint or service(options).endpoint
     job_url = None
     with requests.Session() as session:
         try:
-            params = {"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "json", "QUERY": query}
+            params = {"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "json" if endpoint == BASE else "votable", "QUERY": query}
+            if endpoint != BASE:
+                params["MAXREC"] = str(maxrec)
             if mode == "sync":
-                emit(("progress", "Waiting for Gaia data and parameters"))
-                response = request(session, "GET", BASE+"/sync", options, deadline, emit, params=params)
+                emit(("progress", "Waiting for " + ("GAVO geometric distances" if endpoint != service(options).endpoint else service(options).label)))
+                if endpoint == BASE:
+                    response = request(session, "GET", endpoint+"/sync", options, deadline, emit, params=params)
+                else:
+                    response = request(session, "POST", endpoint+"/sync", options, deadline, emit, data=params, retryable=True)
             else:
-                response = request(session, "POST", BASE+"/async", options, deadline, emit,
+                response = request(session, "POST", endpoint+"/async", options, deadline, emit,
                                    data=params, allow_redirects=False)
                 location = response.headers.get("Location")
                 if not location:
                     raise NetworkFailure("Gaia did not return an async job address")
-                job_url = urljoin(BASE+"/async/", location)
-                if urlparse(job_url).netloc != urlparse(BASE).netloc:
+                job_url = urljoin(endpoint+"/async/", location)
+                if urlparse(job_url).netloc != urlparse(endpoint).netloc:
                     raise NetworkFailure("Unexpected Gaia job host")
                 emit(("job", job_url))
                 request(session, "POST", job_url+"/phase", options, deadline, emit, data={"PHASE": "RUN"}, allow_redirects=False)
@@ -290,7 +321,13 @@ def tap_core(query, mode, options, deadline, emit):
                     time.sleep(options.poll_interval)
                 response = request(session, "GET", job_url+"/results/result", options, deadline, emit)
             start = time.monotonic()
-            rows = parse_rows(response)
+            try:
+                rows = parse_rows(response) if endpoint == BASE else parse_votable(response.content)
+            except Exception as error:
+                raise NetworkFailure("Invalid TAP response: " + str(error)) from error
+            retrieved = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            for row in rows:
+                row["_catalogue_retrieved_utc"] = retrieved
             emit(("timing", "result parsing", time.monotonic()-start))
             return rows
         except BaseException:
@@ -305,7 +342,9 @@ def tap_core(query, mode, options, deadline, emit):
 def _worker(output, task, payload, options, limit):
     try:
         if task == "tap":
-            result = tap_core(payload[0], payload[1], options, time.monotonic()+limit, output.put)
+            result = tap_core(payload[0], payload[1], options, time.monotonic()+limit, output.put,
+                              endpoint=payload[2] if len(payload)>2 else None,
+                              maxrec=payload[3] if len(payload)>3 else 10000)
         elif task == "abort":
             requests.post(payload+"/phase", data={"PHASE": "ABORT"}, timeout=1)
             result = None
@@ -453,12 +492,22 @@ def bounded(task, payload, *, limit=None, options=None):
                 LOGGER.warning("Gaia remote abort could not be confirmed")
 
 
-def tap_query(query, count=1, *, mode=None, limit=None):
+def tap_query(query, count=1, *, mode=None, limit=None, endpoint=None):
     context = CURRENT.get()
     options = context.options if context else settings()
-    mode = mode or ("sync" if count <= options.sync_limit else "async")
+    selected = service(options)
+    endpoint = endpoint or selected.endpoint
+    if endpoint == selected.endpoint:
+        try:
+            query = prepare_query(query, selected, count)
+        except ValueError as error:
+            raise NetworkFailure(str(error)) from error
+    # Short alternative batches avoid creating persistent UWS jobs. ESA keeps
+    # its existing sync/async choice. The hard worker deadline still applies.
+    mode = mode or ("sync" if endpoint != BASE or count <= options.sync_limit else "async")
+    LOGGER.info("TAP provider=%s endpoint=%s query=%s", selected.label, endpoint, query)
     with timed("Gaia "+mode+" total"):
-        return bounded("tap", (query, mode), options=options, limit=limit)
+        return bounded("tap", (query, mode, endpoint, count+10), options=options, limit=limit)
 
 
 if __name__ == "__main__" and "--worker" in sys.argv:

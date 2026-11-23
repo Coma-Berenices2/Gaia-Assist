@@ -1,72 +1,23 @@
 # Gaia Assist
 
-An open-source tool for exploring Gaia DR3 stellar data, comparing scientific methods, and building transparent, reproducible analysis workflows.
+**Turn a Gaia source ID into a stellar profile in one query.** Gaia Assist is an open-source Python app for exploring Gaia Data Release 3 (DR3). Get a first look at a star with little information in other catalogues, or analyse a list of sources for follow-up.
 
-**[Try Online](https://gaia-assist.onrender.com)** · **[Latest Release](https://github.com/Coma-Berenices2/Gaia-Assist/releases)**
+- **Look up one source.** See Gaia measurements such as parallax and apparent G magnitude alongside estimates of **distance, absolute magnitude, effective temperature, radius and stellar type**, where the data support them.
+- **Run a bulk query.** Paste a list of IDs or load a TXT or CSV file. Choose the result columns, export a table for further analysis, or use the desktop app to make colour–magnitude diagrams and stellar classification charts.
 
-<!-- The release link opens the repository's Releases page. Replace it with the exact public-beta release URL when available. -->
+**[Download and install](#installation-and-desktop-setup)** · **[Try online](https://gaia-assist.onrender.com)** · **[GitHub releases](https://github.com/Coma-Berenices2/Gaia-Assist/releases)**
 
-## Screenshot
+**Explorer** gives you a first look at the results, with clickable field explanations and approximate calculations. **Scientist** lets you compare temperature and distance estimates, see which values were adopted and why, and save results with sources, assumptions, available uncertainties and review notes.
 
-> **Screenshot coming soon:** add a Scientist results screenshot showing a Gaia source ID, catalogue measurements, distance and temperature estimates, and quality/provenance notes.
+**Public Beta.** Gaia Assist is an independent community project. Scientific validation is ongoing. Review the inputs, assumptions and quality warnings before using derived results in scientific work.
 
-<!-- Replace the placeholder above with a real screenshot, for example:
-![Gaia Assist Scientist results, including measurements, estimates and quality notes](docs/images/scientist-results.png)
--->
-
-**Status: Public Beta** — Gaia Assist is actively being developed and scientifically validated. Review sources, assumptions and quality warnings before using derived parameters for scientific work.
-
-## Quick Start
-
-1. **[Open Gaia Assist online](https://gaia-assist.onrender.com)** and choose **Scientist** to inspect methods and quality notes, or **Explorer** for a simpler view.
-2. Select **DR3** and enter a numeric Gaia DR3 source ID.
-3. Click **Start Query** and wait for the results; optional information may finish loading afterward.
-4. Compare the Gaia measurements with the derived stellar parameters. Review their sources, uncertainties where available, quality flags and **Calculation details** in Scientist mode.
-5. Use **Save** to retain the result; see [Save and reopen your work](#save-and-reopen-your-work) for formats and reopening guidance.
-
-The online application offers a browser workflow. For local use, sky-image windows and advanced cluster charts, follow the [desktop setup](#installation-and-desktop-setup). See [Browser interface](#optional-use-a-browser-interface) for local hosting and feature differences.
-
-## Explore
-
-Look up individual stars and inspect Gaia measurements, photometry, coordinates and quality indicators. Start with **Explorer** for a simpler view, then switch to **Scientist** to inspect sources, assumptions and comparison results. Both modes include calculated estimates.
-
-## Analyze
-
-Compare temperature and distance estimates in **Scientist**, inspect calculation provenance, and review the assumptions behind derived magnitudes and radii. Use [Bulk Query](#query-several-objects) to analyze several objects, export results, and explore selected populations with desktop colour–magnitude diagrams and classification charts.
-
-## Research
-
-Use saved records, structured exports and method documentation to support transparent analysis workflows. A **reproducible NGC 2546 case study is in development**, with planned documentation of queries, candidate selection and diagnostic figures. It is not yet a completed or validated research result.
-
-Ongoing research work includes scientific validation, cluster membership analysis, extinction-corrected colour–magnitude diagrams and isochrone analysis. These are development goals; the current charts alone do not establish cluster membership.
-
-## Scientific limitations
-
-- **Derived parameters require independent validation before publication-quality use.** Some methods remain under scientific review; inspect the source data, method references and recorded assumptions.
-- A suggested stellar classification is an estimate, not a measured spectral type. Population charts and quality flags do not confirm cluster membership; an unflagged object is not automatically a member.
-- Temperature and radius estimates depend on available measurements, supported method ranges and extinction assumptions. The approximate G-band radius assumes a solar-like bolometric correction; read the [Scientist results](#understand-scientist-results) guidance before interpreting it.
-- Missing or unavailable values are not zero. When extinction is unavailable, Scientist labels the G magnitude **Not de-dusted** rather than treating extinction as zero.
-- **Common Name (Testing)** lookup is experimental. Verify the matched source and coordinates. Carbon-star candidate flags also require review and do not confirm a carbon-star identification.
-
-Gaia Assist is an independent project using Gaia and other astronomical services, not an official ESA application.
-
-## Detailed documentation
-
-- [Installation and desktop setup](#installation-and-desktop-setup)
-- [Look up your first object](#look-up-your-first-object)
-- [Understand Scientist results](#understand-scientist-results)
-- [Bulk queries and cluster charts](#query-several-objects)
-- [Save and reopen your work](#save-and-reopen-your-work)
-- [Browser interface](#optional-use-a-browser-interface)
-- [Troubleshooting](#troubleshooting)
-- [Methods and references](#learn-more-about-the-methods)
-- [License](#license)
+[Using Gaia Assist](#using-gaia-assist) · [Scientist results](#understand-scientist-results) · [Bulk queries and charts](#query-several-objects) · [Saving results](#save-and-reopen-your-work) · [Browser setup](#optional-use-a-browser-interface) · [Scientific limitations](#scientific-limitations) · [Examples](#examples)
 
 ## Installation and desktop setup
 
 ### 1. Download the application
 
-On this repository's GitHub page, choose **Code → Download ZIP**, then extract the ZIP. Keep the extracted files together. Downloading only `Main.py` will not work: it uses the other Python files in the folder.
+On the [Gaia Assist GitHub repository](https://github.com/Coma-Berenices2/Gaia-Assist), choose **Code → Download ZIP** and extract the full application. Keep the Python files and `requirements.txt` together so `Main.py` can load the other modules.
 
 You need **Python 3.10 or newer**, internet access for catalogue queries, and a writable application folder. The application has been tested on Windows with Python 3.13; macOS and Linux have not been fully verified. No Gaia API key or GitHub account is required.
 
@@ -101,22 +52,23 @@ For later visits, run only the last command. Some Linux distributions provide Tk
 
 ### 3. Choose a mode
 
-| Mode | Use it when you want… |
-| --- | --- |
-| **Explorer** | A simpler interface with the original approximate temperature, radius and classification calculations. |
-| **Scientist** | More detailed temperature and distance selection, comparison results, recorded assumptions and scientific review notes. |
+Choose **Explorer** or **Scientist** in the launcher. Scientist is the focus of ongoing scientific improvements. Check each estimate's assumptions and review notes for the star you are analysing.
 
-Scientist is the focus of ongoing scientific improvements. More detail does not make every estimate reliable for every kind of star; read the accompanying warnings.
+## Using Gaia Assist
 
-## Look up your first object
+Launch the desktop app or open the [hosted demo](https://gaia-assist.onrender.com), then choose **Explorer** for a first look or **Scientist** for method comparisons and review notes. The hosted demo can take a moment to start. If a Scientist query stops after showing a preview, use the local build to complete the workflow.
+
+### Look up a source
 
 1. Select the input catalogue, normally **DR3**.
 2. Enter the object's numeric Gaia source ID. For DR1 or DR2 IDs, choose the matching release; the application searches for its DR3 counterpart.
 3. Click **Start Query** and wait for the results. In Scientist mode, initial results can appear before optional information finishes loading.
-4. Review the measurements and quality indicators, then the calculated properties.
-5. Click **Save** if you want to keep the result.
+4. Review the Gaia measurements, quality indicators and calculated properties. In Scientist, open **Calculation details** to see sources, uncertainties where available, and review notes.
+5. Click **Save** to keep the result. See [Save and reopen your work](#save-and-reopen-your-work) for supported formats.
 
 To search by an astronomical name, choose **Common Name (Testing)**. Name lookup is experimental: check the matched source and coordinates before using the result.
+
+Use **Name resolver** to choose **SIMBAD / Sesame — France** (default) or **SIMBAD — Harvard (USA)** when France is unavailable. The choice applies to subsequent common-name searches, including bulk queries, in desktop and browser modes. It changes name resolution only; the Gaia database selector still controls Gaia measurements. Desktop preferences are saved locally; browser choices apply to that browser request. A mirror can also be temporarily unavailable, in which case its error is reported rather than treated as a missing object. Include `name_resolver.py` with the other application files when updating.
 
 Use **Switch to Scientist** or **Switch to Explorer** during your session. Each mode retains its own inputs and results while you switch; switching does not automatically run another query.
 
@@ -148,6 +100,27 @@ When neither Gaia nor the NADC dust map supplies usable G-band extinction, Scien
 
 Temperature and radius estimates depend on the available measurements and extinction assumptions. Review those assumptions before comparing stars. Carbon-star candidate warnings need particular care: an ordinary-star comparison classification does not replace the carbon-star identification, and a candidate flag is not confirmation.
 
+### Compare temperature estimates
+
+Scientist normally prefers an eligible Gaia estimate. It evaluates GSP-Phot and, where applicable, ESP-HS for hot stars. It also checks BP−RP colour estimates against their calibration domains and available photometry, reddening and stellar inputs. A supported colour estimate can supply a missing temperature or take precedence when the selection policy identifies a specific problem with the Gaia estimate. Differences and unresolved conflicts are recorded with the adopted source and reason.
+
+When no eligible Gaia or supported calibrated colour estimate is available, the default compatibility option can use an approximate Explorer BP−RP estimate. Scientist labels it unvalidated and marks it for review. It uses corrected colour when available and identifies observed colour when used without a reddening correction. There is no formal uncertainty for this fallback. You can disable it in **Temperature Settings**. [Temperature methods and limits](TEMPERATURE_EXPERIMENT.md)
+
+### R1 GSP-Phot model-boundary diagnostic
+
+Scientist checks the catalogue GSP-Phot temperature median against the limits for the atmosphere-model library identified by the catalogue. A fit close to a library edge can be constrained by the grid. Gaia Assist runs this check after temperature selection and retains both the original catalogue value and the adopted estimate. If the adopted estimate is GSP-Phot and the diagnostic flags it, the status becomes `needs_review`. If another method was adopted, the warning refers to GSP-Phot and that other estimate keeps its own status.
+
+| Diagnostic status | Condition |
+| --- | --- |
+| `not_flagged` | The median is inside the documented range and more than 1 K from either edge. |
+| `possible_boundary_constraint` | The median is inside the documented range and at most 1 K from an edge, including the edge itself. Missing or unusable percentiles still allow this warning. |
+| `strong_boundary_concern` | The median meets the 1 K rule, and the 16th–84th percentile interval reaches the same edge or lies entirely within 2 K of it. Both bounds must be finite, bracket the median and lie within the documented range. |
+| `not_evaluated` | The library or median is missing or unusable, or the median falls outside the reference range. |
+
+The 1 K and 2 K thresholds are provisional heuristics for fits unusually close to a grid edge. They do not give a calibrated probability of error. The check uses the synthetic library limits in Gaia DR3 Table 11.13. The GSP-Phot methods paper gives wider coverage at the MARCS lower and A upper limits, so interpret those alerts with particular care. [Gaia DR3 library limits](https://gea.esac.esa.int/archive/documentation/GDR3/Data_analysis/chap_cu8par/sec_cu8par_data/ssec_cu8par_data_xp.html) · [GSP-Phot methods paper](https://arxiv.org/abs/2206.06138)
+
+Read **Temperature Review Notes** or expand **Calculation details** to inspect the library, status, distance to the boundary in kelvin and specific warning. Scientist preserves these fields in its single and bulk TXT, CSV and JSON exports. [Diagnostic and method details](TEMPERATURE_EXPERIMENT.md#reviewing-a-gsp-phot-temperature-at-a-library-boundary) · [ξ² Centauri example](#reading-an-r1-warning)
+
 ### Choose a distance policy
 
 Open **Distance Settings** in Scientist mode:
@@ -159,6 +132,18 @@ Open **Distance Settings** in Scientist mode:
 The selected distance affects derived magnitudes, extinction calculations and radius estimates. The threshold is an application setting, not a universal guarantee of accuracy. Selection notes explain which distance was actually used.
 
 Scientist reuses cached catalogue responses where possible. Use force refresh when you need a new service response; changing settings does not always require downloading the same data again. Loading a saved record preserves its recorded calculations.
+
+### Choose a database in Scientist
+
+Use the **Database** selector to choose **ESA Gaia (official)**, **ARI Heidelberg**, **Gaia@AIP**, or **MAST** before starting a single or bulk query. ESA remains the default. Availability can change.
+
+The desktop remembers your choice; it is also available under **Network Settings**. The browser sends the selected database with each query. Changing the choice applies to subsequent queries, and each database uses a separate cache. A running bulk query retains the database it started with. Use **Force refresh** to fetch new responses from that database.
+
+The Gaia source and optional astrophysical parameters come from your selected database. With an alternative selected, published geometric distances come from **GAVO** rather than ESA. The calculated result retains the actual catalogue providers and original retrieval times when available. There is no automatic switch back to ESA on failure. MAST's service is DR3; use a DR3 ID or another provider for DR1 crossmatching.
+
+Restart the app after updating it to use the current database options. Explorer uses its original query path. Sky images and the optional dust-map service remain separate from the database choice.
+
+See [Database selection and verification](SCIENTIST_DATABASES.md) for details.
 
 ## Query several objects
 
@@ -182,7 +167,7 @@ Save figures as **PNG, PDF or SVG**, and chart data as **CSV**. These charts hel
 
 ## Save and reopen your work
 
-Explorer saves results in `saved_objects/`. Scientist saves results in `saved_objects_temperature/`, with text and structured export formats. The application creates these folders as needed.
+Explorer saves text results in `saved_objects/`. Scientist saves single and bulk results as TXT, CSV and JSON in `saved_objects_temperature/`. The application creates these folders as needed.
 
 In Scientist mode, use **Load Saved Results** to reopen a saved JSON or supported older text record. **Prefer JSON for reopening:** it retains the full record, including sources, assumptions and settings. CSV is useful for tables and further analysis; text is convenient for reading.
 
@@ -201,7 +186,7 @@ Open `http://127.0.0.1:65000/`, choose **Explorer** or **Scientist**, and use th
 
 `WebMain_temperature.py` also opens the combined interface, on port 65001 by default. Render uses `WebMain.py` and its assigned port. If a different port is configured, use the address printed in the terminal.
 
-Keep the terminal open while using the interface; press **Ctrl+C** there to stop it. Browser saves are written to the computer running the application. Browser and desktop features are not identical. The local command above restricts access to your own computer.
+Keep the terminal open while using the interface. Press **Ctrl+C** there to stop it. Browser saves are written to the computer running the application. Browser and desktop features are not identical. The local command above restricts access to your own computer.
 
 ## Troubleshooting
 
@@ -217,6 +202,16 @@ Keep the terminal open while using the interface; press **Ctrl+C** there to stop
 | A star is missing from a chart | Check its required values, plot range, estimated classification and the include/exclude setting for flagged objects. |
 | Results cannot be saved | Move the application to a writable folder and check the save error. |
 
+## Scientific limitations
+
+- **Derived parameters require independent validation before publication-quality use.** Some methods remain under scientific review; inspect the source data, method references and recorded assumptions.
+- A suggested stellar classification is an estimate, not a measured spectral type. Population charts and quality flags do not confirm cluster membership; an unflagged object is not automatically a member.
+- Temperature and radius estimates depend on available measurements, supported method ranges and extinction assumptions. The approximate G-band radius assumes a solar-like bolometric correction; read the [Scientist results](#understand-scientist-results) guidance before interpreting it.
+- Missing or unavailable values are not zero. When extinction is unavailable, Scientist labels the G magnitude **Not de-dusted** rather than treating extinction as zero.
+- **Common Name (Testing)** lookup is experimental. Verify the matched source and coordinates. Carbon-star candidate flags also require review and do not confirm a carbon-star identification.
+
+Gaia Assist is developed independently of ESA. See [Data credits and licence](#data-credits-and-licence) for the Gaia data acknowledgement.
+
 ## Learn more about the methods
 
 For calculation details, assumptions and references:
@@ -226,6 +221,41 @@ For calculation details, assumptions and references:
 - [Explorer comparisons and approximate radius](SCIENTIST_COMPARISON_AND_RADIUS.md)
 - [Catalogue requests, caching and carbon-star handling](SCIENTIST_NETWORK_AND_CARBON.md)
 
-## License
+## Examples
 
-Distributed under the [MIT license](LICENSE).
+### Screenshots
+
+<details>
+<summary>Explorer and Scientist interfaces</summary>
+
+**Explorer** shows the results of a lookup for Gaia DR3 `5541416631229166720`, a source from the NGC 2546A candidate list.
+
+![Explorer in the hosted demo, showing a Gaia source ID, coordinates, constellation, distance and magnitudes](docs/images/explorer-results.jpg)
+
+**Scientist** shows the adopted temperature, method and review status for ξ² Centauri. The hosted demo retained this preview after the query stopped.
+
+![Scientist in the hosted demo, showing a retained preview with an adopted temperature of 10,000 K from Gaia GSP-Phot and a needs_review status](docs/images/scientist-results.jpg)
+
+</details>
+
+### Case study: NGC 2546A
+
+1. **Candidate selection outside Gaia Assist.** A separate astrometric analysis identified a concentration in Gaia DR3 parallax and proper motion and produced a list of **495 candidate source IDs**.
+2. **Bulk analysis in Gaia Assist.** The ID list was imported into Scientist using **Bulk Query → Load Text File** with **DR3** selected. ARI Heidelberg supplied all 495 source rows during an ESA storage issue. Gaia Assist processed the catalogue data, exported per-source results and produced the desktop colour–magnitude diagram and spectral classification counts. In the 11 October 2026 export, **377 of 495** sources adopted a Gaia catalogue temperature (**343 GSP-Phot** and **34 ESP-HS**). The CMD showed **428** sources after **61** quality exclusions and **6** with missing usable CMD values.
+3. **Research interpretation outside Gaia Assist.** Follow-up analysis used the exports and figures to examine the candidate population and assess how distance and extinction assumptions affected the CMD. The diagram explores an externally selected sample. Membership, a calibrated cluster metallicity and an isochrone age remain open.
+
+This workflow shows how to take a candidate list from an external analysis into Gaia Assist and get inspectable results for further work. Cluster membership analysis, scientific validation, extinction-corrected CMD analysis and isochrone fitting remain areas of ongoing research.
+
+![Gaia Assist colour–magnitude diagram for 428 plotted NGC 2546A candidates, with New BP−RP on the horizontal axis and absolute magnitude on the vertical axis](docs/images/ngc-2546a-cmd.png)
+
+*NGC 2546A candidate sample. The chart plots 428 of 495 input sources. The legend's “No contamination flag” means that the plotted sources passed the app's chart exclusion rules. Field stars can still be present.*
+
+### Reading an R1 warning
+
+For **ξ² Centauri** (Gaia DR3 `6081542475600377472`), the GSP-Phot median is **9,999.6045 K**, only **0.3955 K** below the PHOENIX upper limit of **10,000 K**. The reported interval, **9,998.639–9,999.912 K**, lies within 2 K of that limit, which meets the `strong_boundary_concern` criterion. The interface displays the rounded temperature and the saved record retains full precision.
+
+## Data credits and licence
+
+Gaia Assist uses data from the European Space Agency (ESA) mission Gaia, processed by the Gaia Data Processing and Analysis Consortium (DPAC). DPAC receives funding from national institutions, especially those participating in the Gaia Multilateral Agreement. For publications using these data, follow the [Gaia DR3 credit and citation guidance](https://gea.esac.esa.int/archive/documentation/GDR3/Miscellaneous/sec_credit_and_citation_instructions/).
+
+Gaia Assist is distributed under the [MIT licence](LICENSE).

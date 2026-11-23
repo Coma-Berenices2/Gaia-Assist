@@ -284,6 +284,12 @@ def save_bulk_rows(rows, selected_columns, input_mode, input_values):
 
 
 def make_page():
+    import name_resolver
+    resolver_options = "".join(f'<option value="{key}"{" selected" if key == name_resolver.selected_service() else ""}>{label}</option>'
+                               for key, label in name_resolver.LABELS.items())
+    defaults = network.settings()
+    database_options = "".join(f'<option value="{key}"{" selected" if key == defaults.catalogue_service else ""}>{label}</option>'
+                               for key, label in network.SERVICE_LABELS.items())
     config = {
         "columns": Main.DISPLAY_COLUMNS,
         "fieldExplanations": Main.FIELD_EXPLANATIONS,
@@ -295,6 +301,7 @@ def make_page():
         "derivedColumns": list(Main.DERIVED_COLUMNS),
         "detailColumns": sorted(Main.TEMPERATURE_DETAIL_FIELDS),
         "primaryColumns": list(Main.PRIMARY_DISPLAY_ORDER),
+        "defaultBulkColumns": list(Main.DEFAULT_BULK_COLUMNS),
         "bulkBatchSize": Main.BULK_GAIA_BATCH_SIZE,
         "commonNameRelease": Main.COMMON_NAME_RELEASE,
         "warningMessages": {
@@ -553,6 +560,8 @@ def make_page():
   <main>
     <h1>Gaia Assist · Scientist</h1>
     <div class="options">
+      <label>Database <select id="catalogueService">{database_options}</select></label>
+      <label>Name resolver <select id="resolverService">{resolver_options}</select></label>
       <label><input id="forceRefresh" type="checkbox"> Force refresh (ignore cache)</label>
       <label>Request timeout (s) <input id="requestTimeout" type="number" min="1" value="{network.settings().request_timeout}"></label>
       <label>Overall query / batch limit (s) <input id="overallTimeout" type="number" min="1" value="{network.settings().overall_timeout}"></label>
@@ -560,7 +569,7 @@ def make_page():
       <label>Cache expiry (s) <input id="cacheTtl" type="number" min="1" value="{network.settings().cache_ttl}"></label>
       <button id="cancelQueries" type="button">Cancel queries</button>
     </div>
-    <p class="subtle">Fetch core astrometric and photometric values from ESA Gaia.</p>
+    <p class="subtle">Query Gaia DR3 through your selected database. Alternative databases use GAVO for published geometric distances.</p>
     <details style="margin-bottom: 18px">
       <summary>Temperature settings (apply to subsequent single and bulk queries)</summary>
       <div style="display:grid;grid-template-columns: 1fr 1fr;gap:8px;padding:12px">
@@ -701,7 +710,8 @@ def make_page():
     async function streamQuery(url, body, onEvent, signal) {{
       const response = await fetch(url, {{method: "POST", headers: {{"Content-Type": "application/json"}},
         body: JSON.stringify({{...body, forceRefresh: document.querySelector("#forceRefresh").checked,
-          networkOptions: {{request_timeout: Number(document.querySelector("#requestTimeout").value),
+          networkOptions: {{resolver_service: document.querySelector("#resolverService").value, catalogue_service: document.querySelector("#catalogueService").value,
+            request_timeout: Number(document.querySelector("#requestTimeout").value),
             overall_timeout: Number(document.querySelector("#overallTimeout").value),
             optional_timeout: Number(document.querySelector("#optionalTimeout").value),
             cache_ttl: Number(document.querySelector("#cacheTtl").value)}}}}), signal}});
@@ -772,8 +782,11 @@ def make_page():
 
     let currentRows = [];
     let lastSavedObjectKey = null;
-    let bulkColumnOrder = Object.keys(config.columns);
-    let bulkSelectedColumns = new Set(config.primaryColumns);
+    let bulkColumnOrder = [
+      ...config.defaultBulkColumns,
+      ...Object.keys(config.columns).filter((key) => !config.defaultBulkColumns.includes(key)),
+    ];
+    let bulkSelectedColumns = new Set(config.defaultBulkColumns);
     let draggedBulkColumn = null;
     let bulkResultRows = [];
     let bulkInputRows = [];
@@ -1329,13 +1342,17 @@ class GaiaAssistWebHandler(BaseHTTPRequestHandler):
                 self.stream_request(payload, parsed_path.path == "/bulk-query-stream")
                 return
             if parsed_path.path == "/query":
-                response = self.handle_query(payload)
+                opts = network.NetworkOptions(**{**asdict(network.settings()), **payload.get("networkOptions", {})})
+                with network.query_context(options=opts, force_refresh=bool(payload.get("forceRefresh"))):
+                    response = self.handle_query(payload)
             elif parsed_path.path == "/load":
                 response = load_saved_payload(str(payload.get("filename", "")), str(payload.get("text", "")))
             elif parsed_path.path == "/save":
                 response = self.handle_save(payload)
             elif parsed_path.path == "/bulk-query":
-                response = self.handle_bulk_query(payload)
+                opts = network.NetworkOptions(**{**asdict(network.settings()), **payload.get("networkOptions", {})})
+                with network.query_context(options=opts, force_refresh=bool(payload.get("forceRefresh"))):
+                    response = self.handle_bulk_query(payload)
             elif parsed_path.path == "/bulk-save":
                 response = self.handle_bulk_save(payload)
             else:

@@ -5,6 +5,7 @@ import re
 import socket
 import sys
 import traceback
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -147,7 +148,7 @@ def run_bulk_query(objects, release, selected_columns):
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             futures = [
                 executor.submit(
-                    build_bulk_result_row,
+                    copy_context().run, build_bulk_result_row,
                     object_id,
                     release,
                     selected_columns,
@@ -234,6 +235,9 @@ def save_bulk_rows(rows, selected_columns, input_mode, input_values):
 
 
 def make_page():
+    import name_resolver
+    resolver_options = "".join(f'<option value="{key}"{" selected" if key == name_resolver.selected_service() else ""}>{label}</option>'
+                               for key, label in name_resolver.LABELS.items())
     config = {
         "columns": Main.DISPLAY_COLUMNS,
         "fieldExplanations": Main.FIELD_EXPLANATIONS,
@@ -510,6 +514,8 @@ def make_page():
       </select>
       <button id="queryButton" type="submit">Start Query</button>
     </form>
+
+    <label>Name resolver <select id="resolverService">{resolver_options}</select></label>
 
     <div class="options">
       <label class="checkbox">
@@ -936,6 +942,7 @@ def make_page():
           method: "POST",
           headers: {{ "Content-Type": "application/json" }},
           body: JSON.stringify({{
+            resolverService: document.querySelector("#resolverService").value,
             objects: bulkInputRows,
             release: bulkReleaseSelect.value,
             selectedColumns,
@@ -1012,7 +1019,7 @@ def make_page():
         const response = await fetch("/query", {{
           method: "POST",
           headers: {{ "Content-Type": "application/json" }},
-          body: JSON.stringify({{ sourceId, release }}),
+          body: JSON.stringify({{ sourceId, release, resolverService: document.querySelector("#resolverService").value }}),
         }});
         const payload = await response.json();
         if (!response.ok) {{
@@ -1098,11 +1105,15 @@ class GaiaAssistWebHandler(BaseHTTPRequestHandler):
         try:
             payload = self.read_json_body()
             if parsed_path.path == "/query":
-                response = self.handle_query(payload)
+                import name_resolver
+                with name_resolver.use_service(payload.get("resolverService", name_resolver.selected_service())):
+                    response = self.handle_query(payload)
             elif parsed_path.path == "/save":
                 response = self.handle_save(payload)
             elif parsed_path.path == "/bulk-query":
-                response = self.handle_bulk_query(payload)
+                import name_resolver
+                with name_resolver.use_service(payload.get("resolverService", name_resolver.selected_service())):
+                    response = self.handle_bulk_query(payload)
             elif parsed_path.path == "/bulk-save":
                 response = self.handle_bulk_save(payload)
             else:

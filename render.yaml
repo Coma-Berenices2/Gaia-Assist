@@ -3,7 +3,7 @@ services:
     name: gaia-assist
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python WebMain_temperature.py
+    startCommand: python WebMain.py
     envVars:
       - key: HOST
         value: 0.0.0.0

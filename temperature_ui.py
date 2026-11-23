@@ -20,18 +20,30 @@ def open_network_settings(app):
         "optional_timeout": "Optional data wait (seconds)", "cache_ttl": "Cache expiry (seconds)",
         "batch_size": "IDs per batch", "sync_limit": "Maximum IDs for synchronous TAP",
         "attempts": "Transient request attempts (1–3)", "poll_interval": "Async polling interval (seconds)"}
+    labels["catalogue_service"] = "Database"
+    from name_resolver import LABELS as RESOLVER_LABELS
+    labels["resolver_service"] = "Name resolver"
+    choices = {"catalogue_service": network.SERVICE_LABELS, "resolver_service": RESOLVER_LABELS}
     variables = {}
     for row, (key, value) in enumerate(asdict(network.settings()).items()):
         ttk.Label(frame, text=labels[key]).grid(row=row, column=0, sticky="w", pady=4)
-        variables[key] = tk.StringVar(value=str(value))
-        ttk.Entry(frame, textvariable=variables[key], width=14).grid(row=row, column=1, padx=12)
+        variables[key] = tk.StringVar(value=choices[key][value] if key in choices else str(value))
+        widget = (ttk.Combobox(frame, textvariable=variables[key], values=tuple(choices[key].values()), state="readonly", width=23)
+                  if key in choices else ttk.Entry(frame, textvariable=variables[key], width=14))
+        widget.grid(row=row, column=1, padx=12)
     def apply():
         try:
-            values = {k: (int(v.get()) if k in ("batch_size", "sync_limit", "attempts") else float(v.get())) for k, v in variables.items()}
+            values = {k: (next(key for key, label in choices[k].items() if label == v.get()) if k in choices
+                          else int(v.get()) if k in ("batch_size", "sync_limit", "attempts") else float(v.get())) for k, v in variables.items()}
             network.save_settings(network.NetworkOptions(**values))
         except (ValueError, OSError) as error:
             messagebox.showerror("Check network settings", str(error), parent=window)
             return
+        if hasattr(app, "database_choice"):
+            app.database_choice.set(network.SERVICE_LABELS[values["catalogue_service"]])
+        if hasattr(app, "resolver_choice"):
+            app.resolver_choice.set(RESOLVER_LABELS[values["resolver_service"]])
+        app.status.set("Network settings saved; selected database applies to subsequent queries.")
         window.destroy()
     ttk.Button(frame, text="Save", command=apply).grid(row=len(labels), column=1, pady=10)
     return window

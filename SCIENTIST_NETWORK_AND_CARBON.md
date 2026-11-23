@@ -2,6 +2,8 @@
 
 Launch `Main.py`, select Scientist, and rerun the query. Explorer's file and calculations are unchanged. The new behaviour is shared by the Scientist desktop and web applications.
 
+**11 October 2026 update:** Scientist now has a **Database** selector for ESA, ARI Heidelberg, Gaia@AIP and MAST, with provider-specific caches and GAVO geometric distances for alternatives. ESA remains the default. The transport/timing observations below describe the original ESA path; alternatives use bounded synchronous VOTable requests. See [Database selection and verification](SCIENTIST_DATABASES.md) for current behavior and tests.
+
 ## Query strategy and measured limits
 
 The original September 21 log shows successful first attempts taking about 13m28s for source data and 11m48s for parameters. It does not identify queue, execution, polling or download time. Blank catalogue temperatures are not evidence that either request was retried.
