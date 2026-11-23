@@ -227,17 +227,13 @@ For calculation details, assumptions and references:
 
 These October 2026 captures show a browser lookup and the desktop Scientist workflow.
 
-<details>
-<summary>Explorer · look up a single star</summary>
+#### Explorer lookup
 
 Explorer resolves **55 Cnc** using the experimental common-name lookup and displays its Gaia source ID alongside estimated distance, magnitudes, temperature and radius.
 
 ![Explorer browser results for 55 Cnc, showing the matched Gaia DR3 source, distance, magnitudes, temperature and radius](docs/images/explorer-lookup.png)
 
-</details>
-
-<details>
-<summary>Scientist · review results, compare distances and view the sky</summary>
+#### Scientist results and distance comparison
 
 Scientist shows the catalogue provider, the adopted temperature and its source, and review notes alongside an approximate radius and tentative stellar classification.
 
@@ -247,11 +243,11 @@ The distance panel shows both the inverse-parallax estimate and the Bayesian geo
 
 ![Scientist distance comparison with inverse-parallax and Bayesian geometric estimates, percentile bounds and Automatic selection reason](docs/images/scientist-distance.png)
 
+#### Desktop sky image
+
 **Show Sky Image** opens a 5.0′ × 5.0′ DSS2 colour cutout centred on the selected Gaia source in a separate desktop window. Image credits shown in the app are DSS2 (STScI/NASA, CDS) and ESA ESASky.
 
 ![Desktop sky-image window showing a DSS2 optical star field centred on Gaia DR3 source 3401845786149805056](docs/images/desktop-sky-image.png)
-
-</details>
 
 ### Case study: NGC 2546A
 
